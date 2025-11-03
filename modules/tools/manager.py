@@ -92,19 +92,27 @@ class ToolManager:
         if not self._tools:
             return ""
         
-        descriptions = ["你可以使用以下工具來協助使用者：\n"]
+        descriptions = [
+            "# 可用工具\n",
+            "你是一個使用**繁體中文**對話的智能助理，可以使用以下工具來協助使用者。",
+            "**重要規則：**",
+            "1. 當使用者的需求符合工具描述時，你必須調用相應的工具",
+            "2. 所有對話必須使用繁體中文",
+            "3. 調用工具後，用簡短的中文告訴使用者操作已完成\n"
+        ]
         
         for tool in self._tools.values():
-            descriptions.append(f"### {tool.name}")
-            descriptions.append(f"{tool.description}\n")
-            descriptions.append("參數：")
+            descriptions.append(f"## 工具：{tool.name}")
+            descriptions.append(tool.description)
+            descriptions.append("\n**參數說明：**")
             for param in tool.parameters:
-                required = "必要" if param.required else "可選"
-                descriptions.append(f"  - {param.name} ({param.type}, {required}): {param.description}")
+                required = "【必要】" if param.required else "【可選】"
+                descriptions.append(f"- {param.name} ({param.type}) {required}: {param.description}")
             descriptions.append("")
         
         descriptions.append(
-            "當你需要使用工具時，請以以下格式回應：\n"
+            "# 工具調用格式\n"
+            "當你需要使用工具時，**必須**以以下 JSON 格式回應（不要加任何其他文字）：\n"
             "```tool\n"
             "{\n"
             '  "tool_name": "工具名稱",\n'
@@ -112,7 +120,19 @@ class ToolManager:
             '    "參數名": "參數值"\n'
             "  }\n"
             "}\n"
-            "```"
+            "```\n"
+            "\n"
+            "**範例：**\n"
+            "使用者說：「幫我記帳，今天吃了200元的牛肉麵」\n"
+            "你應該回應：\n"
+            "```tool\n"
+            "{\n"
+            '  "tool_name": "accounting_agent",\n'
+            '  "parameters": {\n'
+            '    "toolInput": "今天吃了200元的牛肉麵"\n'
+            "  }\n"
+            "}\n"
+            "```\n"
         )
         
         return "\n".join(descriptions)

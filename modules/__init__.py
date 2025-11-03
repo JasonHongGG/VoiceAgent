@@ -10,9 +10,8 @@ from .stt.whisper_stt import WhisperSTT
 from .tts.coqui_tts import CoquiTTS
 from .llm.ollama_llm import OllamaLLM
 
-# High-level agents
+# High-level agent
 from .agent import VoiceAgent
-from .streaming_agent import StreamingVoiceAgent
 
 # Tool system
 from .tools.base import BaseTool, ToolParameter, ToolResult
@@ -34,9 +33,8 @@ __all__ = [
     "WhisperSTT",
     "CoquiTTS",
     "OllamaLLM",
-    # Agents
+    # Agent
     "VoiceAgent",
-    "StreamingVoiceAgent",
     # Tools
     "BaseTool",
     "ToolParameter",

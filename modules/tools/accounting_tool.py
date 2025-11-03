@@ -20,7 +20,7 @@ class AccountingAgentWebHook(BaseTool):
     
     def __init__(
         self,
-        webhook_url: str = "https://6aeda076cc90.ngrok-free.app/webhook/7a336883-1379-438d-aa08-95d1af38ef80",
+        webhook_url: str = "https://6aeda076cc90.ngrok-free.app/webhook-test/7a336883-1379-438d-aa08-95d1af38ef80",
         timeout: int = 30,
     ):
         """
@@ -42,8 +42,17 @@ class AccountingAgentWebHook(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "記帳工具。當使用者提到記帳、記錄支出、花費、消費等需求時使用此工具。"
-            "此工具會將使用者的記帳需求轉發給專門的記帳系統處理。"
+            "記帳助手工具。\n"
+            "**重要：當使用者提到以下任何需求時，必須使用此工具：**\n"
+            "- 記帳、幫我記帳、記錄\n"
+            "- 花費、支出、消費、開銷\n"
+            "- 買了XXX、吃了XXX、花了XXX元\n"
+            "- 價格、金額、錢\n\n"
+            "**使用範例：**\n"
+            "使用者說：「幫我記帳，今天中午吃了200元的牛肉麵」\n"
+            "→ 必須調用此工具，toolInput: '今天中午吃了200元的牛肉麵'\n\n"
+            "使用者說：「我下午2點買咖啡花了50元」\n"
+            "→ 必須調用此工具，toolInput: '下午2點買咖啡花了50元'"
         )
     
     @property
@@ -100,11 +109,11 @@ class AccountingAgentWebHook(BaseTool):
                 except json.JSONDecodeError:
                     result_data = {"raw_response": response.text}
                 
-                print(f"[AccountingAgentWebHook] Success: {result_data}")
+                print(f"[AccountingAgentWebHook] ✓ 記帳成功")
                 
                 return ToolResult(
                     success=True,
-                    data=result_data,
+                    data="記帳成功",
                     metadata={
                         "status_code": response.status_code,
                         "tool_input": tool_input,

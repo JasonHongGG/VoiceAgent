@@ -8,17 +8,18 @@ from fastrtc.utils import AdditionalOutputs
 from dotenv import load_dotenv
 
 # 導入模組化的元件
-from modules.stt import FasterWhisperSTT
+from modules.stt import WhisperSTT
 from modules.tts import CoquiTTS
 from modules.llm import OllamaLLM
 from modules.agent import VoiceAgent
+from modules.tools import ToolManager, AccountingAgentWebHook
 
 load_dotenv()
 
 # ========== 初始化模組化元件 ==========
 
 # 1. 初始化 STT (Speech-to-Text)
-stt_engine = FasterWhisperSTT(
+stt_engine = WhisperSTT(
     model_size=os.getenv("STT_MODEL_SIZE", "medium"),
     device=os.getenv("DEVICE", "cuda").lower(),
     beam_size=5,
@@ -39,46 +40,54 @@ tts_engine = CoquiTTS(
     device=os.getenv("DEVICE", "cuda").lower(),
 )
 
-# 4. 建立 Voice Agent
+# 4. 初始化工具管理器和記帳工具
+tool_manager = ToolManager()
+tool_manager.register_tool(AccountingAgentWebHook())
+print(f"[Tools] Registered tools: {tool_manager.list_tools()}")
+
+# 5. 建立流式 Voice Agent（關鍵改變！）
 voice_agent = VoiceAgent(
     stt_engine=stt_engine,
     llm_engine=llm_engine,
     tts_engine=tts_engine,
+    tool_manager=tool_manager,  # 加入工具管理器
+    enable_llm=True,
+    sentence_delimiters=r'[。！？\.!?;；\n]',  # 句子分隔符
+    min_sentence_length=5,  # 最小句子長度
 )
 
-# ========== FastRTC Handler ==========
+# ========== FastRTC Handler (流式版本) ==========
 
 def echo(audio: Tuple[int, np.ndarray]):
-    """處理音訊輸入並返回語音回應。"""
-    print("Received audio chunk for processing.")
+    """
+    流式處理音訊輸入並即時返回語音回應。
+    LLM 每生成一個句子就立即 TTS，大幅減少延遲
+    """
+    print("Received audio chunk for streaming processing.")
     
-    # 使用 VoiceAgent 處理音訊
-    tts_result, transcription, llm_response = voice_agent.process_audio(
-        audio=audio,
-        return_transcript=True,
-    )
+    full_response_text = ""
     
-    # 準備回應文字
-    if transcription and transcription.text:
-        response_text = transcription.text
-        if llm_response:
-            response_text = f"User: {transcription.text}\nAI: {llm_response.content}"
-    else:
-        response_text = "未偵測到語音內容。"
+    # 使用流式 VoiceAgent 處理音訊
+    # 這會即時 yield 每個句子的音訊，而非等待全部完成
+    for tts_result, sentence in voice_agent.process_audio(audio):
+        full_response_text += sentence
+        
+        print(f"[Streaming] Yielding sentence: '{sentence[:50]}...'")
+        
+        # 立即返回這個句子的音訊和目前累積的文字
+        yield tts_result.as_tuple(), AdditionalOutputs(full_response_text)
     
-    # 返回 TTS 結果和文字
-    if tts_result:
-        yield tts_result.as_tuple(), AdditionalOutputs(response_text)
-    else:
-        yield AdditionalOutputs(response_text)
+    # 如果沒有生成任何內容
+    if not full_response_text:
+        yield AdditionalOutputs("未偵測到語音內容。")
 
 # ========== Gradio UI 設定 ==========
 
-transcript_box = gr.Textbox(label="Transcript", lines=6)
+transcript_box = gr.Textbox(label="Response (Streaming)", lines=6)
 
 
 def update_transcript(current_text: str, new_text: str):
-    """更新轉錄文字框。"""
+    """更新轉錄文字框（會持續更新顯示流式生成的內容）。"""
     return new_text
 
 
@@ -92,4 +101,8 @@ stream = Stream(
 )
 
 if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("流式語音助理 - 即時回應模式")
+    print("="*60)
+    
     stream.ui.launch()

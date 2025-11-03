@@ -25,9 +25,9 @@ class ToolResult:
     
     def __str__(self) -> str:
         if self.success:
-            return f"成功: {self.data}"
+            return "執行成功"
         else:
-            return f"失敗: {self.error}"
+            return f"執行失敗: {self.error}"
 
 
 class BaseTool(ABC):
