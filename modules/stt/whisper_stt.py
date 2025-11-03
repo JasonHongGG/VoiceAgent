@@ -11,7 +11,7 @@ from .base import STTEngine, TranscriptionResult
 from ..utils.audio_utils import to_mono_and_normalize
 
 
-class FasterWhisperSTT(STTEngine):
+class WhisperSTT(STTEngine):
     """使用 Faster Whisper 的 STT 引擎。"""
     
     def __init__(

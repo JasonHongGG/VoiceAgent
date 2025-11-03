@@ -1,7 +1,7 @@
 """Base interface for Large Language Model engines."""
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Iterator
 
 
 class LLMResponse:
@@ -52,3 +52,41 @@ class LLMEngine(ABC):
             LLMResponse: LLM 的回應
         """
         pass
+    
+    def query_stream(
+        self, 
+        prompt: str, 
+        system_prompt: Optional[str] = None
+    ) -> Iterator[str]:
+        """
+        流式查詢 LLM（逐字/逐句生成）。
+        
+        Args:
+            prompt: 使用者的提示訊息
+            system_prompt: 系統提示訊息（可選）
+            
+        Yields:
+            str: 逐步生成的文字片段
+        """
+        # 預設實作：將完整回應一次性返回
+        response = self.query(prompt, system_prompt)
+        yield response.content
+    
+    def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        system_prompt: Optional[str] = None,
+    ) -> Iterator[str]:
+        """
+        流式多輪對話（逐字/逐句生成）。
+        
+        Args:
+            messages: 對話歷史
+            system_prompt: 系統提示訊息（可選）
+            
+        Yields:
+            str: 逐步生成的文字片段
+        """
+        # 預設實作：將完整回應一次性返回
+        response = self.chat(messages, system_prompt)
+        yield response.content

@@ -1,6 +1,6 @@
 """STT module initialization."""
 
 from .base import STTEngine, TranscriptionResult
-from .fasterwhisper_stt import FasterWhisperSTT
+from .whisper_stt import WhisperSTT
 
-__all__ = ["STTEngine", "TranscriptionResult", "FasterWhisperSTT"]
+__all__ = ["STTEngine", "TranscriptionResult", "WhisperSTT"]
