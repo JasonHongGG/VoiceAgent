@@ -6,6 +6,7 @@ import numpy as np
 from .stt.base import STTEngine, TranscriptionResult
 from .tts.base import TTSEngine, TTSResult
 from .llm.base import LLMEngine, LLMResponse
+from .tools.manager import ToolManager
 
 
 class VoiceAgent:
@@ -21,6 +22,8 @@ class VoiceAgent:
         stt_engine: STTEngine,
         llm_engine: LLMEngine,
         tts_engine: TTSEngine,
+        tool_manager: Optional[ToolManager] = None,
+        enable_llm: bool = True,
     ):
         """
         初始化語音助理。
@@ -29,17 +32,21 @@ class VoiceAgent:
             stt_engine: 語音辨識引擎
             llm_engine: 語言模型引擎
             tts_engine: 語音合成引擎
+            tool_manager: 工具管理器（可選）
             enable_llm: 是否啟用 LLM（若為 False，則直接將 STT 結果轉為語音）
         """
-        self.enable_llm = True
         self.stt = stt_engine
         self.llm = llm_engine
         self.tts = tts_engine
+        self.tool_manager = tool_manager
+        self.enable_llm = enable_llm
         
         print("[VoiceAgent] Initialized successfully")
         print(f"[VoiceAgent] STT: {type(stt_engine).__name__}")
-        print(f"[VoiceAgent] LLM: {type(llm_engine).__name__}")
+        print(f"[VoiceAgent] LLM: {type(llm_engine).__name__} (enabled: {enable_llm})")
         print(f"[VoiceAgent] TTS: {type(tts_engine).__name__}")
+        if tool_manager and tool_manager.has_tools():
+            print(f"[VoiceAgent] Tools: {tool_manager.list_tools()}")
     
     def process_audio(
         self,
@@ -74,9 +81,34 @@ class VoiceAgent:
         response_text = transcription.text
         
         if self.enable_llm:
-            llm_response = self.llm.query(transcription.text)
+            # 準備 system prompt（包含工具說明）
+            system_prompt = None
+            if self.tool_manager and self.tool_manager.has_tools():
+                system_prompt = self.tool_manager.get_tools_description()
+            
+            llm_response = self.llm.query(transcription.text, system_prompt=system_prompt)
             response_text = llm_response.content
             print(f"[VoiceAgent] LLM response: '{response_text}'")
+            
+            # 檢查是否需要執行工具
+            if self.tool_manager:
+                tool_call = self.tool_manager.parse_tool_call(response_text)
+                if tool_call:
+                    tool_name, parameters = tool_call
+                    print(f"[VoiceAgent] Executing tool: {tool_name}")
+                    
+                    # 執行工具
+                    tool_result = self.tool_manager.execute_tool(tool_name, **parameters)
+                    
+                    # 將工具結果告訴 LLM，讓它生成最終回應
+                    follow_up_prompt = (
+                        f"工具 '{tool_name}' 執行結果：\n"
+                        f"{tool_result}\n\n"
+                        f"請根據這個結果給使用者一個友善的回應。"
+                    )
+                    llm_response = self.llm.query(follow_up_prompt)
+                    response_text = llm_response.content
+                    print(f"[VoiceAgent] Final response after tool: '{response_text}'")
         
         if not response_text:
             print("[VoiceAgent] No text to synthesize")

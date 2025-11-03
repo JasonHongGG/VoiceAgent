@@ -14,6 +14,11 @@ from .llm.ollama_llm import OllamaLLM
 from .agent import VoiceAgent
 from .streaming_agent import StreamingVoiceAgent
 
+# Tool system
+from .tools.base import BaseTool, ToolParameter, ToolResult
+from .tools.manager import ToolManager
+from .tools.accounting_tool import AccountingAgentWebHook
+
 # Utilities
 from .utils.audio_utils import to_mono_and_normalize
 
@@ -32,6 +37,12 @@ __all__ = [
     # Agents
     "VoiceAgent",
     "StreamingVoiceAgent",
+    # Tools
+    "BaseTool",
+    "ToolParameter",
+    "ToolResult",
+    "ToolManager",
+    "AccountingAgentWebHook",
     # Utils
     "to_mono_and_normalize",
 ]
