@@ -4,3 +4,4 @@ coqui-tts
 python-dotenv
 requests
 gradio
+pypinyin
