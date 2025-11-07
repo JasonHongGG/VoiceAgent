@@ -16,6 +16,52 @@ from modules.tools import ToolManager, AccountingAgentWebHook
 
 load_dotenv()
 
+# ========== WebRTC/Networking 配置（行動/外網穿透穩定性） ==========
+# 允許透過環境變數提供 STUN/TURN 設定，並可在瀏覽器端強制走 TURN (relay)
+# 以避免 ngrok/企業網無法轉發 UDP 造成的 ICE/DTLS/SRTP 連線問題。
+def _build_ice_servers_from_env():
+        """從環境變數產生 ICE 伺服器設定。
+
+        支援：
+            - RTC_STUN_URLS: 逗號分隔，例如
+                "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+            - RTC_TURN_URL:  TURN 入口，例如
+                "turns:turn.example.com:443?transport=tcp" 或 "turn:turn.example.com:3478"
+            - RTC_TURN_USERNAME / RTC_TURN_PASSWORD: TURN 認證
+        """
+        ice_servers = []
+
+        stun_urls = os.getenv("RTC_STUN_URLS")
+        if stun_urls:
+                urls = [u.strip() for u in stun_urls.split(",") if u.strip()]
+                if urls:
+                        ice_servers.append({"urls": urls})
+
+        turn_url = os.getenv("RTC_TURN_URL")
+        turn_user = os.getenv("RTC_TURN_USERNAME")
+        turn_pass = os.getenv("RTC_TURN_PASSWORD")
+        if turn_url:
+                turn_entry = {"urls": [turn_url]}
+                if turn_user and turn_pass:
+                        turn_entry["username"] = turn_user
+                        turn_entry["credential"] = turn_pass
+                ice_servers.append(turn_entry)
+
+        # 若未指定，預設提供 Google STUN 提升存活率
+        if not ice_servers:
+                ice_servers = [{"urls": ["stun:stun.l.google.com:19302"]}]
+
+        return ice_servers
+
+RTC_CLIENT_CONFIG = {"iceServers": _build_ice_servers_from_env()}
+_ice_policy = os.getenv("RTC_ICE_TRANSPORT_POLICY")  # 例："relay" 強制走 TURN
+if _ice_policy:
+        # 只會作用在瀏覽器端 (RTCPeerConnection)，server 端 aiortc 以 iceServers 為主
+        RTC_CLIENT_CONFIG["iceTransportPolicy"] = _ice_policy
+
+# 伺服器端 aiortc 也可以帶相同 iceServers（雖然 iceTransportPolicy 不適用於 server）
+RTC_SERVER_CONFIG = {"iceServers": _build_ice_servers_from_env()}
+
 # ========== 初始化模組化元件 ==========
 
 # 1. 初始化 STT (Speech-to-Text)
@@ -96,6 +142,8 @@ stream = Stream(
     handler=ReplyOnPause(echo),
     modality="audio",
     mode="send-receive",
+    rtc_configuration=RTC_CLIENT_CONFIG,
+    server_rtc_configuration=RTC_SERVER_CONFIG,
     additional_outputs_handler=update_transcript,
     additional_outputs=[transcript_box],
 )
@@ -105,4 +153,15 @@ if __name__ == "__main__":
     print("流式語音助理 - 即時回應模式")
     print("="*60)
     
-    stream.ui.launch(share=True, server_port=5000)
+    # 可用環境變數指定 HOST/PORT 與 SSL 憑證；行動裝置音訊裝置切換在 HTTPS 下更穩定
+    server_name = os.getenv("HOST", "0.0.0.0")
+    server_port = int(os.getenv("PORT", "5000"))
+    ssl_certfile = os.getenv("SSL_CERTFILE")
+    ssl_keyfile = os.getenv("SSL_KEYFILE")
+
+    launch_kwargs = {"server_name": server_name, "server_port": server_port, "share": True}
+    if ssl_certfile and ssl_keyfile:
+        launch_kwargs["ssl_certfile"] = ssl_certfile
+        launch_kwargs["ssl_keyfile"] = ssl_keyfile
+
+    stream.ui.launch(**launch_kwargs)

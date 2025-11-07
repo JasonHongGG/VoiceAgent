@@ -20,7 +20,7 @@ class AccountingAgentWebHook(BaseTool):
     
     def __init__(
         self,
-        webhook_url: str = "https://6aeda076cc90.ngrok-free.app/webhook-test/7a336883-1379-438d-aa08-95d1af38ef80",
+        webhook_url: str,
         timeout: int = 30,
     ):
         """
@@ -95,6 +95,10 @@ class AccountingAgentWebHook(BaseTool):
         
         try:
             # 發送 POST 請求到 WebHook
+            print(f"[AccountingAgentWebHook] Sending request to n8n...")
+            print(f"[AccountingAgentWebHook] URL: {self._webhook_url}")
+            print(f"[AccountingAgentWebHook] Payload: {{'toolInput': '{tool_input}'}}")
+            
             response = requests.post(
                 self._webhook_url,
                 json={"toolInput": tool_input},
@@ -117,6 +121,8 @@ class AccountingAgentWebHook(BaseTool):
                     metadata={
                         "status_code": response.status_code,
                         "tool_input": tool_input,
+                        "response_data": result_data,
+                        "response_time": response.elapsed.total_seconds(),
                     }
                 )
             else:
