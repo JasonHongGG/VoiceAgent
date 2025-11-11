@@ -43,13 +43,21 @@ class CoquiTTS(TTSEngine):
         # 取得支援的語言和說話者
         self._languages = self.tts.languages or []
         self._speakers = self.tts.speakers or []
-        self._default_speaker = self._speakers[0] if self._speakers else None
+        self._default_speaker = "Maja Ruoho" if self._speakers else None
     
     def synthesize(
         self,
         text: str,
         language: Optional[str] = None,
         speaker: Optional[str] = None,
+        speaker_wav: Optional[str] = None,  # 參考音訊（情感控制）
+        # ========== 情感/風格控制參數 ==========
+        temperature: float = 0.8,          # 控制創造性/多樣性 (0.1-1.0)
+        speed: float = 1.0,                 # 語速控制 (0.5-2.0)
+        repetition_penalty: float = 10.0,   # 重複懲罰 (1.0-20.0)
+        length_penalty: float = 1.0,        # 長度懲罰
+        top_p: float = 0.85,                # 核採樣參數
+        top_k: int = 50,                    # Top-K 採樣
     ) -> TTSResult:
         """
         將文字合成為語音。
@@ -58,18 +66,47 @@ class CoquiTTS(TTSEngine):
             text: 要合成的文字
             language: 語言代碼
             speaker: 說話者名稱
+            speaker_wav: 參考音訊路徑（用於情感/風格控制）
+            
+            # 情感/風格控制參數
+            temperature: 控制創造性和情感表達的多樣性
+                - 較低 (0.1-0.5): 更穩定、一致，情感較平淡
+                - 中等 (0.6-0.9): 平衡，自然的情感表達
+                - 較高 (0.9-1.5): 更有表現力，情感更豐富但可能不穩定
+            
+            speed: 語速控制
+                - < 1.0: 說話更慢
+                - 1.0: 正常語速
+                - > 1.0: 說話更快
+            
+            repetition_penalty: 避免重複相同音節/詞語
+                - 較高值 (10-20): 減少重複，更自然
+                - 較低值 (1-5): 可能產生重複
+            
+            length_penalty: 控制生成長度的傾向
+            top_p: 核採樣，控制詞彙選擇的多樣性
+            top_k: 限制候選詞彙數量
             
         Returns:
             TTSResult: 合成的音訊結果
         """
         # 準備 TTS 參數
-        tts_kwargs = {"text": text}
+        tts_kwargs = {
+            "text": text,
+            # 情感/風格控制參數
+            "temperature": temperature,
+            "speed": speed,
+            "repetition_penalty": repetition_penalty,
+            "length_penalty": length_penalty,
+            "top_p": top_p,
+            "top_k": top_k,
+        }
         
         # 語言選擇
         self._select_language(tts_kwargs, language)
         
-        # 說話者選擇
-        self._select_speaker(tts_kwargs, speaker)
+        # 說話者選擇（優先使用動態 speaker_wav）
+        self._select_speaker(tts_kwargs, speaker, speaker_wav)
         
         # 合成音訊
         try:
@@ -107,22 +144,39 @@ class CoquiTTS(TTSEngine):
         print(f"[CoquiTTS] Using language: {selected_language}")
         return selected_language
 
-    def _select_speaker(self, tts_kwargs, speaker: Optional[str]) -> Optional[str]:
-        """選擇適當的說話者。"""
-        # 驗證參考音訊檔案
-        reference_speaker = os.getenv("TTS_SPEAKER_WAV")
-        if reference_speaker and not Path(reference_speaker).is_file():
-            print(f"[CoquiTTS] Warning: reference_speaker '{reference_speaker}' not found, ignoring.")
-
+    def _select_speaker(self, tts_kwargs, speaker: Optional[str], speaker_wav: Optional[str] = None) -> Optional[str]:
+        """選擇適當的說話者。
         
-        # 選擇 speaker_wav、speaker 或預設說話者
+        優先順序：
+        1. 動態傳入的 speaker_wav（用於情感控制）
+        2. 環境變數設定的參考音訊
+        3. 指定的 speaker
+        4. 預設 speaker
+        """
+        # 1. 優先使用動態傳入的 speaker_wav
+        if speaker_wav and Path(speaker_wav).is_file():
+            tts_kwargs["speaker_wav"] = speaker_wav
+            print(f"[CoquiTTS] Using dynamic speaker_wav: {speaker_wav}")
+            return
+        
+        # 2. 驗證環境變數的參考音訊檔案
+        reference_speaker = os.getenv("TTS_SPEAKER_WAV")
         if reference_speaker and Path(reference_speaker).is_file():
             tts_kwargs["speaker_wav"] = reference_speaker
-            print(f"[CoquiTTS] Using speaker_wav: {reference_speaker}")
-        elif speaker:
+            print(f"[CoquiTTS] Using speaker_wav from env: {reference_speaker}")
+            return
+        
+        if reference_speaker and not Path(reference_speaker).is_file():
+            print(f"[CoquiTTS] Warning: reference_speaker '{reference_speaker}' not found, ignoring.")
+        
+        # 3. 使用指定的 speaker
+        if speaker:
             tts_kwargs["speaker"] = speaker
             print(f"[CoquiTTS] Using speaker: {speaker}")
-        elif self._default_speaker:
+            return
+        
+        # 4. 使用預設 speaker
+        if self._default_speaker:
             tts_kwargs["speaker"] = self._default_speaker
             print(f"[CoquiTTS] Using default speaker: {self._default_speaker}")
         
