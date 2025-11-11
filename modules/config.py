@@ -8,6 +8,7 @@ from modules.tts import CoquiTTS
 from modules.llm import OllamaLLM
 from modules.agent import VoiceAgent
 from modules.tools import ToolManager, AccountingAgentWebHook
+from modules.utils.emotion_manager import EmotionManager
 
 
 def load_environment():
@@ -56,7 +57,20 @@ def initialize_tool_manager():
     return tool_manager
 
 
-def initialize_voice_agent(stt_engine, llm_engine, tts_engine, tool_manager):
+def initialize_emotion_manager():
+    """初始化情感管理器。"""
+    emotion_audio_dir = os.getenv("EMOTION_AUDIO_DIR", "resource/emotions")
+    return EmotionManager(emotion_audio_dir=emotion_audio_dir)
+
+
+def initialize_voice_agent(
+    stt_engine, 
+    llm_engine, 
+    tts_engine, 
+    tool_manager, 
+    emotion_manager=None,
+    enable_emotion_control=False
+):
     """初始化 Voice Agent。
     
     Args:
@@ -64,6 +78,8 @@ def initialize_voice_agent(stt_engine, llm_engine, tts_engine, tool_manager):
         llm_engine: LLM 引擎實例
         tts_engine: TTS 引擎實例
         tool_manager: 工具管理器實例
+        emotion_manager: 情感管理器實例（可選）
+        enable_emotion_control: 是否啟用自動情感控制
     
     Returns:
         配置好的 VoiceAgent 實例
@@ -73,14 +89,19 @@ def initialize_voice_agent(stt_engine, llm_engine, tts_engine, tool_manager):
         llm_engine=llm_engine,
         tts_engine=tts_engine,
         tool_manager=tool_manager,
+        emotion_manager=emotion_manager,
         enable_llm=True,
+        enable_emotion_control=enable_emotion_control,
         sentence_delimiters=r'[。！？\.!?;；\n]',
         min_sentence_length=5,
     )
 
 
-def setup_voice_agent():
+def setup_voice_agent(enable_emotion_control=False):
     """完整設置 Voice Agent，包含所有依賴元件。
+    
+    Args:
+        enable_emotion_control: 是否啟用自動情感控制（預設為 False）
     
     Returns:
         配置好的 VoiceAgent 實例
@@ -91,5 +112,13 @@ def setup_voice_agent():
     llm_engine = initialize_llm_engine()
     tts_engine = initialize_tts_engine()
     tool_manager = initialize_tool_manager()
+    emotion_manager = initialize_emotion_manager()
     
-    return initialize_voice_agent(stt_engine, llm_engine, tts_engine, tool_manager)
+    return initialize_voice_agent(
+        stt_engine, 
+        llm_engine, 
+        tts_engine, 
+        tool_manager,
+        emotion_manager,
+        enable_emotion_control
+    )

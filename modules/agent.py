@@ -8,6 +8,7 @@ from .stt.base import STTEngine, TranscriptionResult
 from .tts.base import TTSEngine, TTSResult
 from .llm.base import LLMEngine, LLMResponse
 from .tools.manager import ToolManager
+from .utils.emotion_manager import EmotionManager
 
 
 class VoiceAgent:
@@ -20,6 +21,9 @@ class VoiceAgent:
     支援兩種模式：
     - 批次模式（enable_streaming=False）：等待完整回應後一次性返回
     - 串流模式（enable_streaming=True, 預設）：即時返回，類似 ElevenLabs
+    
+    支援情感控制：
+    - 通過 EmotionManager 自動或手動控制 TTS 的情感和語氣
     """
     
     def __init__(
@@ -28,8 +32,10 @@ class VoiceAgent:
         llm_engine: LLMEngine,
         tts_engine: TTSEngine,
         tool_manager: Optional[ToolManager] = None,
+        emotion_manager: Optional[EmotionManager] = None,
         enable_llm: bool = True,
         enable_streaming: bool = True,
+        enable_emotion_control: bool = False,
         sentence_delimiters: str = r'[。！？\.!?;；]',
         min_sentence_length: int = 5,
     ):
@@ -41,8 +47,10 @@ class VoiceAgent:
             llm_engine: 語言模型引擎
             tts_engine: 語音合成引擎
             tool_manager: 工具管理器（可選）
+            emotion_manager: 情感管理器（可選）
             enable_llm: 是否啟用 LLM（若為 False，則直接將 STT 結果轉為語音）
             enable_streaming: 是否啟用串流模式（預設為 True）
+            enable_emotion_control: 是否啟用自動情感控制（預設為 False）
             sentence_delimiters: 句子分隔符的正則表達式（僅串流模式使用）
             min_sentence_length: 最小句子長度（僅串流模式使用）
         """
@@ -50,8 +58,10 @@ class VoiceAgent:
         self.llm = llm_engine
         self.tts = tts_engine
         self.tool_manager = tool_manager
+        self.emotion_manager = emotion_manager or EmotionManager()
         self.enable_llm = enable_llm
         self.enable_streaming = enable_streaming
+        self.enable_emotion_control = enable_emotion_control
         self.sentence_delimiters = sentence_delimiters
         self.min_sentence_length = min_sentence_length
         
@@ -60,8 +70,12 @@ class VoiceAgent:
         print(f"[VoiceAgent] STT: {type(stt_engine).__name__}")
         print(f"[VoiceAgent] LLM: {type(llm_engine).__name__} (enabled: {enable_llm})")
         print(f"[VoiceAgent] TTS: {type(tts_engine).__name__}")
+        print(f"[VoiceAgent] Emotion Control: {enable_emotion_control}")
         if tool_manager and tool_manager.has_tools():
             print(f"[VoiceAgent] Tools: {tool_manager.list_tools()}")
+        if self.emotion_manager:
+            emotions = self.emotion_manager.list_emotions()
+            print(f"[VoiceAgent] Available Emotions: {emotions if emotions else 'None (using parameters only)'}")
     
     def process_audio(
         self,
@@ -313,10 +327,18 @@ class VoiceAgent:
                     
                     # 立即合成這個句子
                     try:
-                        tts_result = self.tts.synthesize(
-                            text=sentence,
-                            language=language,
-                        )
+                        # 如果啟用情感控制，取得情感配置
+                        tts_kwargs = {"text": sentence, "language": language}
+                        
+                        if self.enable_emotion_control:
+                            emotion_config = self.emotion_manager.get_emotion_config(
+                                text=sentence,
+                                auto_detect=True
+                            )
+                            tts_kwargs.update(emotion_config)
+                            print(f"[VoiceAgent] Emotion config: {emotion_config}")
+                        
+                        tts_result = self.tts.synthesize(**tts_kwargs)
                         yield tts_result, sentence
                     except Exception as e:
                         print(f"[VoiceAgent] TTS failed for sentence: {e}")
@@ -352,10 +374,17 @@ class VoiceAgent:
                     for sentence in sentences:
                         if len(sentence.strip()) >= self.min_sentence_length:
                             try:
-                                tts_result = self.tts.synthesize(
-                                    text=sentence,
-                                    language=language,
-                                )
+                                # 如果啟用情感控制，取得情感配置
+                                tts_kwargs = {"text": sentence, "language": language}
+                                
+                                if self.enable_emotion_control:
+                                    emotion_config = self.emotion_manager.get_emotion_config(
+                                        text=sentence,
+                                        auto_detect=True
+                                    )
+                                    tts_kwargs.update(emotion_config)
+                                
+                                tts_result = self.tts.synthesize(**tts_kwargs)
                                 yield tts_result, sentence
                             except Exception as e:
                                 print(f"[VoiceAgent] TTS failed: {e}")
@@ -365,10 +394,17 @@ class VoiceAgent:
                 # 處理最後的 buffer
                 if buffer.strip() and len(buffer.strip()) >= self.min_sentence_length:
                     try:
-                        tts_result = self.tts.synthesize(
-                            text=buffer.strip(),
-                            language=language,
-                        )
+                        # 如果啟用情感控制，取得情感配置
+                        tts_kwargs = {"text": buffer.strip(), "language": language}
+                        
+                        if self.enable_emotion_control:
+                            emotion_config = self.emotion_manager.get_emotion_config(
+                                text=buffer.strip(),
+                                auto_detect=True
+                            )
+                            tts_kwargs.update(emotion_config)
+                        
+                        tts_result = self.tts.synthesize(**tts_kwargs)
                         yield tts_result, buffer.strip()
                     except Exception as e:
                         print(f"[VoiceAgent] TTS failed: {e}")
@@ -381,10 +417,17 @@ class VoiceAgent:
         if buffer.strip() and len(buffer.strip()) >= self.min_sentence_length:
             print(f"[VoiceAgent] Synthesizing final buffer: '{buffer.strip()}'")
             try:
-                tts_result = self.tts.synthesize(
-                    text=buffer.strip(),
-                    language=language,
-                )
+                # 如果啟用情感控制，取得情感配置
+                tts_kwargs = {"text": buffer.strip(), "language": language}
+                
+                if self.enable_emotion_control:
+                    emotion_config = self.emotion_manager.get_emotion_config(
+                        text=buffer.strip(),
+                        auto_detect=True
+                    )
+                    tts_kwargs.update(emotion_config)
+                
+                tts_result = self.tts.synthesize(**tts_kwargs)
                 yield tts_result, buffer.strip()
             except Exception as e:
                 print(f"[VoiceAgent] TTS failed for final buffer: {e}")
