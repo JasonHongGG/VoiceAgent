@@ -6,8 +6,10 @@
 
 - 🎯 **統一 API**：一個 `VoiceAgent` 類別支援批次和串流兩種模式
 - ⚡ **即時回應**：串流模式下 2-5 秒內開始回應（預設模式）
-- 🔧 **模組化設計**：輕鬆替換 STT、LLM、TTS 引擎
+- � **自動歡迎**：WebRTC 連接建立時自動打招呼
+- �🔧 **模組化設計**：輕鬆替換 STT、LLM、TTS 引擎
 - 🛠️ **工具系統**：支援 LLM 調用外部工具（記帳、查詢等）
+- 🌐 **WebRTC 支援**：完整的 STUN/TURN 配置，穩定的網路穿透
 - 📦 **開箱即用**：完整的範例和文件
 - 🔄 **框架無關**：可在 FastRTC 或其他框架中使用
 
@@ -236,11 +238,32 @@ python demo_tools.py
 ### FastRTC 應用
 
 ```bash
-# 串流模式（推薦）
-python app_streaming.py
+# 串流模式（推薦）- 支援 STUN/TURN 和自動歡迎
+python app_turn.py
 
 # 批次模式
 python app.py
+```
+
+### 環境變數配置
+
+複製 `.env.example` 到 `.env` 並根據需求修改：
+
+```bash
+cp .env.example .env
+```
+
+**重要配置項：**
+
+```bash
+# 歡迎語設定（當用戶連接時自動播放）
+GREETING_MESSAGE=你好！我是你的語音助理，有什麼可以幫助你的嗎？
+
+# WebRTC 配置（提升連接穩定性）
+RTC_STUN_URLS=stun:stun.l.google.com:19302
+# RTC_TURN_URL=turns:turn.example.com:443?transport=tcp
+# RTC_TURN_USERNAME=username
+# RTC_TURN_PASSWORD=password
 ```
 
 ## 💡 何時使用哪種模式？
