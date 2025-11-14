@@ -15,11 +15,27 @@
 
 ## 🚀 快速開始
 
-### 安裝依賴
+### 安裝依賴（建立虛擬環境）
+
+原本檔案名 `requiremenet.txt` 拼錯，已改為 `requirements.txt`。建議使用虛擬環境，避免系統 Python 汙染。
+
+快速腳本：
 
 ```bash
-pip install -r requiremenet.txt
+chmod +x scripts/create_venv.sh
+./scripts/create_venv.sh
 ```
+
+手動方式：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+VS Code 右下角如果還只顯示「Python」，請按它或使用 Command Palette:
+`Python: Select Interpreter` → 選擇 `./.venv/bin/python`。若補全尚未生效再執行 `Python: Restart Language Server`。
 
 ### 基本使用（推薦）
 
@@ -223,34 +239,10 @@ tts = CoquiTTS(
 
 ## 🚀 執行範例
 
-### 基本展示
-
-```bash
-python demo_unified_agent.py
-```
-
-### 工具系統展示
-
-```bash
-python demo_tools.py
-```
-
 ### FastRTC 應用
 
 ```bash
-# 串流模式（推薦）- 支援 STUN/TURN 和自動歡迎
-python app_turn.py
-
-# 批次模式
 python app.py
-```
-
-### 環境變數配置
-
-複製 `.env.example` 到 `.env` 並根據需求修改：
-
-```bash
-cp .env.example .env
 ```
 
 **重要配置項：**
