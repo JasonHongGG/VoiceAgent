@@ -237,6 +237,27 @@ tts = CoquiTTS(
 )
 ```
 
+### 情感語音整合
+
+- `resource/emotions/` 目錄中的每個 `.wav` 會自動映射成一種情緒（檔名即情緒，例如 `happy.wav`、`sad.wav`）。
+- `setup_voice_agent()` 會初始化 `EmotionManager` 並把它交給 `VoiceAgent`，因此回應會依照句子內容自動偵測情緒並選擇對應的參考音訊與 TTS 參數。
+- 如果想關閉情感語音，只要在建立 `VoiceAgent` 時傳入 `emotion_manager=None`（不初始化即可）。
+- `EmotionManager` 也可手動控制：
+
+```python
+from modules.utils.emotion_manager import EmotionManager
+
+emotion_manager = EmotionManager(emotion_audio_dir="resource/emotions")
+agent = VoiceAgent(
+    stt=WhisperSTT(),
+    llm=OllamaLLM(),
+    tts=CoquiTTS(),
+    emotion_manager=emotion_manager,  # 有提供就啟用
+)
+```
+
+> 小撇步：同一個情緒可透過 `emotion_manager.add_emotion("calm", "custom.wav")` 動態加入，不需重開程式。
+
 ## 🚀 執行範例
 
 ### FastRTC 應用

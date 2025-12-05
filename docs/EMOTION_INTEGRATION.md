@@ -33,7 +33,7 @@
 from modules.config import setup_voice_agent
 
 # 啟用自動情感控制
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 ```
 
 這樣設定後，Voice Agent 會：
@@ -144,7 +144,7 @@ TTS_SPEAKER_WAV=resource/emotions/neutral.wav
 from modules.config import setup_voice_agent
 
 # 啟用自動情感控制
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 
 # 在串流處理中，每句話會自動應用情感
 # 例如：
@@ -191,7 +191,7 @@ voice_agent = initialize_voice_agent(
     tts_engine,
     tool_manager,
     emotion_manager,
-    enable_emotion_control=True
+   emotion_manager=EmotionManager()
 )
 ```
 
@@ -363,7 +363,7 @@ print(f"Emotion config: {config}")
 
 ### Q: 如何關閉自動情感控制？
 
-**A**: 在 `setup_voice_agent()` 時設定 `enable_emotion_control=False`（預設即為 False）。
+**A**: 建立 `VoiceAgent` 時不傳入 `emotion_manager`，即可停用情感語音。
 
 ### Q: 可以同時使用多個參考音訊嗎？
 

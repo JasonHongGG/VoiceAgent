@@ -50,7 +50,7 @@
 ┌─────────────────────────────────────────────────┐
 │                  VoiceAgent                     │
 │  ┌───────────────────────────────────────────┐  │
-│  │         enable_emotion_control=True       │  │
+│  │         EmotionManager()                  │  │
 │  └───────────────────────────────────────────┘  │
 │                      │                          │
 │         ┌────────────┴────────────┐             │
@@ -78,7 +78,7 @@
 VoiceAgent/
 ├── modules/
 │   ├── agent.py                    # VoiceAgent 主類別
-│   │   └─ enable_emotion_control   # 情感控制開關
+│   │   └─ emotion_manager         # 提供情感管理器即啟用
 │   ├── tts/
 │   │   └── coqui_tts.py           # 支援情感參數的 TTS
 │   ├── utils/
@@ -105,7 +105,7 @@ VoiceAgent/
 # app_turn.py
 from modules.config import setup_voice_agent
 
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 ```
 
 就這樣！現在每句話都會自動應用情感控制。

@@ -19,7 +19,7 @@ voice_agent = setup_voice_agent()
 from modules.config import setup_voice_agent
 
 # 新版本（啟用自動情感控制）
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 ```
 
 **就這麼簡單！** 現在您的 Voice Agent 已經支援情感控制了。
@@ -140,7 +140,7 @@ greeting = voice_agent.tts.synthesize(
 ```python
 from modules.config import setup_voice_agent
 
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 
 # 自訂 happy 情感的參數
 voice_agent.emotion_manager.DEFAULT_EMOTION_PARAMS["happy"]["temperature"] = 1.2
@@ -193,7 +193,7 @@ python demo_tts_parameters.py
 
 檢查是否啟用：
 ```python
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 ```
 
 ### 問題 2: 參考音訊未被使用

@@ -3,7 +3,7 @@
 ## 🚀 一行啟用
 
 ```python
-voice_agent = setup_voice_agent(enable_emotion_control=True)
+voice_agent = setup_voice_agent()
 ```
 
 ## 🎯 7 種預設情感
