@@ -18,6 +18,18 @@ RTC_SERVER_CONFIG = get_server_rtc_config()
 # ========== 初始化 Voice Agent ==========
 voice_agent = setup_voice_agent()
 
+# 預先合成歡迎語音，避免連線後再等待 TTS 啟動
+GREETING_TEXT = os.getenv("GREETING_MESSAGE", "你好！我是你的語音助理，有什麼可以幫助你的嗎？")
+PRECOMPUTED_GREETING = None
+try:
+    PRECOMPUTED_GREETING = voice_agent.synthesize_speech(
+        text=GREETING_TEXT,
+        language="zh",
+    )
+    print(f"[Greeting] Warmed up greeting audio: {len(PRECOMPUTED_GREETING.audio)} samples")
+except Exception as exc:
+    print(f"[Greeting] Warmup failed, will synthesize on demand: {exc}")
+
 # ========== FastRTC Handler ==========
 
 def greet_user():
@@ -25,15 +37,11 @@ def greet_user():
     啟動時的歡迎函數，會在 WebRTC 連接建立時自動執行。
     直接使用 TTS，不經過 LLM，避免無限循環。
     """
-    greeting_text = os.getenv("GREETING_MESSAGE", "你好！我是你的語音助理，有什麼可以幫助你的嗎？")
+    greeting_text = GREETING_TEXT
     print(f"[Greeting] Sending welcome message: '{greeting_text}'")
-    
-    # 直接使用 TTS，不經過 LLM
+
     try:
-        tts_result = voice_agent.synthesize_speech(
-            text=greeting_text,
-            language="zh"  # 明確指定語言為中文
-        )
+        tts_result = PRECOMPUTED_GREETING 
         print(f"[Greeting] TTS generated {len(tts_result.audio)} samples")
         yield tts_result.as_tuple(), AdditionalOutputs(greeting_text)
     except Exception as e:

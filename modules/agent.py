@@ -74,7 +74,7 @@ class VoiceAgent:
         if self.emotion_manager:
             emotions = self.emotion_manager.list_emotions()
             print(f"[VoiceAgent] Available Emotions: {emotions if emotions else 'None (using parameters only)'}")
-    
+
     def _synthesize_with_emotion(
         self,
         text: str,
@@ -313,9 +313,13 @@ class VoiceAgent:
         Yields:
             (tts_result, sentence): TTS 音訊結果和對應的句子
         """
-        # 準備 system prompt（包含工具說明）
+        use_tools = bool(
+            self.tool_manager
+            and self.tool_manager.has_tools()
+        )
+
         system_prompt = None
-        if self.tool_manager and self.tool_manager.has_tools():
+        if use_tools:
             system_prompt = self.tool_manager.get_tools_description()
             print(f"[VoiceAgent] Using system prompt with {len(self.tool_manager)} tools")
         
@@ -329,7 +333,7 @@ class VoiceAgent:
             full_response += chunk
             
             # 先檢查是否已經出現工具調用的開始標記
-            if "```tool" in full_response and not tool_call_detected:
+            if use_tools and "```tool" in full_response and not tool_call_detected:
                 tool_call_detected = True
                 print("[VoiceAgent] Detected tool call marker, accumulating full response...")
             
@@ -359,7 +363,7 @@ class VoiceAgent:
                     buffer = buffer.replace(sentence, "", 1).lstrip()
         
         # 檢查是否有工具調用（優先處理）
-        if self.tool_manager:
+        if use_tools and self.tool_manager:
             tool_call = self.tool_manager.parse_tool_call(full_response)
             if tool_call:
                 tool_name, parameters = tool_call
