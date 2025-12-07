@@ -1,6 +1,7 @@
 """Configuration and initialization for Voice Agent components."""
 
 import os
+import json
 from dotenv import load_dotenv
 
 from modules.stt import WhisperSTT
@@ -11,9 +12,43 @@ from modules.tools import ToolManager, AccountingAgentWebHook
 from modules.utils.emotion_manager import EmotionManager
 
 
+# Cached prompt configuration loaded from JSON (prompts.json by default)
+_PROMPT_CONFIG: dict | None = None
+
+
 def load_environment():
     """載入環境變數。"""
     load_dotenv()
+
+
+def load_prompt_config() -> dict:
+    """載入提示配置（system prompt、greeting）。"""
+    global _PROMPT_CONFIG
+    if _PROMPT_CONFIG is not None:
+        return _PROMPT_CONFIG
+
+    path = os.getenv("PROMPTS_CONFIG", "prompts.json")
+    config = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                print(f"[Config] Loaded prompts from {path}")
+        except Exception as exc:
+            print(f"[Config] Failed to load {path}, using defaults: {exc}")
+
+    # Fallback to environment values if JSON missing fields
+    config.setdefault(
+        "system_prompt",
+        "你是一個聊天助手，對於使用者的問題提供資訊和建議，請用簡短的繁體中文句子回覆。",
+    )
+    config.setdefault(
+        "greeting_message",
+        "你好！我是你的語音助理，有什麼可以幫助你的嗎？"
+    )
+
+    _PROMPT_CONFIG = config
+    return _PROMPT_CONFIG
 
 
 def initialize_stt_engine():
@@ -28,10 +63,11 @@ def initialize_stt_engine():
 
 def initialize_llm_engine():
     """初始化 LLM (Language Model) 引擎。"""
+    prompt_config = load_prompt_config()
     return OllamaLLM(
         api_url=os.getenv("LLM_API_URL"),
         model=os.getenv("LLM_MODEL"),
-        default_system_prompt=os.getenv("LLM_SYSTEM_PROMPT"),
+        default_system_prompt=prompt_config.get("system_prompt"),
         timeout=int(os.getenv("LLM_TIMEOUT", "60")),
     )
 

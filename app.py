@@ -8,7 +8,7 @@ import gradio as gr
 from fastrtc import Stream, ReplyOnPause
 from fastrtc.utils import AdditionalOutputs
 
-from modules.config import setup_voice_agent
+from modules.config import setup_voice_agent, load_prompt_config
 from modules.utils.rtc_config import get_client_rtc_config, get_server_rtc_config
 
 # ========== WebRTC 配置 ==========
@@ -17,9 +17,13 @@ RTC_SERVER_CONFIG = get_server_rtc_config()
 
 # ========== 初始化 Voice Agent ==========
 voice_agent = setup_voice_agent()
+PROMPT_CONFIG = load_prompt_config()
 
 # 預先合成歡迎語音，避免連線後再等待 TTS 啟動
-GREETING_TEXT = os.getenv("GREETING_MESSAGE", "你好！我是你的語音助理，有什麼可以幫助你的嗎？")
+GREETING_TEXT = PROMPT_CONFIG.get(
+    "greeting_message",
+    "你好！我是你的語音助理，有什麼可以幫助你的嗎？",
+)
 PRECOMPUTED_GREETING = None
 try:
     PRECOMPUTED_GREETING = voice_agent.synthesize_speech(

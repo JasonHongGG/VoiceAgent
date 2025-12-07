@@ -4,14 +4,13 @@
 
 ## ✨ 特色
 
-- 🎯 **統一 API**：一個 `VoiceAgent` 類別支援批次和串流兩種模式
-- ⚡ **即時回應**：串流模式下 2-5 秒內開始回應（預設模式）
-- � **自動歡迎**：WebRTC 連接建立時自動打招呼
-- �🔧 **模組化設計**：輕鬆替換 STT、LLM、TTS 引擎
-- 🛠️ **工具系統**：支援 LLM 調用外部工具（記帳、查詢等）
-- 🌐 **WebRTC 支援**：完整的 STUN/TURN 配置，穩定的網路穿透
-- 📦 **開箱即用**：完整的範例和文件
-- 🔄 **框架無關**：可在 FastRTC 或其他框架中使用
+- **統一 API**：一個 `VoiceAgent` 類別支援批次和串流兩種模式
+- **即時回應**：串流模式下 2-5 秒內開始回應（預設模式）
+- **自動歡迎**：WebRTC 連接建立時自動打招呼
+- **模組化設計**：輕鬆替換 STT、LLM、TTS 引擎
+- **工具系統**：支援 LLM 調用外部工具（記帳、查詢等）
+- **WebRTC 支援**：完整的 STUN/TURN 配置，穩定的網路穿透
+- **框架無關**：可在 FastRTC 或其他框架中使用
 
 ## 🚀 快速開始
 
@@ -19,23 +18,12 @@
 
 原本檔案名 `requiremenet.txt` 拼錯，已改為 `requirements.txt`。建議使用虛擬環境，避免系統 Python 汙染。
 
-快速腳本：
-
-```bash
-chmod +x scripts/create_venv.sh
-./scripts/create_venv.sh
-```
-
-手動方式：
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-
-VS Code 右下角如果還只顯示「Python」，請按它或使用 Command Palette:
-`Python: Select Interpreter` → 選擇 `./.venv/bin/python`。若補全尚未生效再執行 `Python: Restart Language Server`。
 
 ### 基本使用（推薦）
 
@@ -128,13 +116,6 @@ fastRTC/
 ├── demo_unified_agent.py      # 統一 Agent 展示
 └── demo_tools.py              # 工具系統展示
 ```
-
-## 📚 文件
-
-- **[UNIFIED_AGENT.md](UNIFIED_AGENT.md)** - 統一 Agent 完整說明 ⭐ 必讀
-- **[TOOLS_GUIDE.md](TOOLS_GUIDE.md)** - 工具系統使用指南
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - 架構設計說明
-- **[QUICKREF.md](QUICKREF.md)** - 快速參考指南
 
 ## 🎯 範例
 
@@ -296,15 +277,6 @@ RTC_STUN_URLS=stun:stun.l.google.com:19302
 - 音訊後處理或分析
 - 錄製完整回應
 - 離線處理
-
-## 🤝 貢獻
-
-歡迎貢獻！可以：
-
-1. 新增其他 STT/LLM/TTS 引擎的實作
-2. 建立更多工具
-3. 改進文件
-4. 回報 Bug
 
 ## 📝 授權
 
