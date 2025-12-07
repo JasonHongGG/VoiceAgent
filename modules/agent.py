@@ -209,9 +209,10 @@ class VoiceAgent:
             return None, transcription if return_transcript else None, llm_response
         
         # 3. 文字轉語音
+        lang_to_use = self._detect_language_from_text(response_text, fallback=None)
         tts_result = self._synthesize_with_emotion(
             text=response_text,
-            language=transcription.language,
+            language=lang_to_use,
         )
         print(f"[VoiceAgent] TTS synthesized {len(tts_result.audio)} samples at {tts_result.sample_rate} Hz")
         
@@ -314,7 +315,8 @@ class VoiceAgent:
                 self._append_history("assistant", response_text)
         
         # 2. 文字轉語音
-        tts_result = self._synthesize_with_emotion(text=response_text, language=language)
+        lang_to_use = self._detect_language_from_text(response_text, fallback=None)
+        tts_result = self._synthesize_with_emotion(text=response_text, language=lang_to_use)
         print(f"[VoiceAgent] TTS synthesized {len(tts_result.audio)} samples at {tts_result.sample_rate} Hz")
         
         return tts_result
@@ -389,9 +391,10 @@ class VoiceAgent:
                     
                     # 立即合成這個句子
                     try:
+                        lang_to_use = self._detect_language_from_text(sentence, fallback=None)
                         tts_result = self._synthesize_with_emotion(
                             text=sentence,
-                            language=language,
+                            language=lang_to_use,
                         )
                         yield tts_result, sentence
                         spoken_response += sentence
@@ -450,9 +453,10 @@ class VoiceAgent:
                 # 處理最後的 buffer
                 if buffer.strip() and len(buffer.strip()) >= self.min_sentence_length:
                     try:
+                        lang_to_use = self._detect_language_from_text(buffer.strip(), fallback=None)
                         tts_result = self._synthesize_with_emotion(
                             text=buffer.strip(),
-                            language=language,
+                            language=lang_to_use,
                         )
                         yield tts_result, buffer.strip()
                         spoken_response += buffer.strip()
@@ -469,9 +473,10 @@ class VoiceAgent:
         if buffer.strip() and len(buffer.strip()) >= self.min_sentence_length:
             print(f"[VoiceAgent] Synthesizing final buffer: '{buffer.strip()}'")
             try:
+                lang_to_use = self._detect_language_from_text(buffer.strip(), fallback=None)
                 tts_result = self._synthesize_with_emotion(
                     text=buffer.strip(),
-                    language=language,
+                    language=lang_to_use,
                 )
                 yield tts_result, buffer.strip()
                 spoken_response += buffer.strip()
@@ -553,3 +558,33 @@ class VoiceAgent:
             LLMResponse: LLM 回應
         """
         return self.llm.query(prompt)
+
+    def _detect_language_from_text(self, text: str, fallback: Optional[str] = None) -> Optional[str]:
+        """根據 LLM 文字粗略偵測語言，盡量對應 TTS 語言碼。"""
+        if not text:
+            return fallback
+
+        # 依據 Unicode 範圍判斷主要語言
+        if re.search(r"[\u4e00-\u9fff]", text):  # CJK Unified Ideographs -> 中文
+            return "zh-cn"
+        if re.search(r"[\uac00-\ud7af]", text):  # Hangul
+            return "ko"
+        if re.search(r"[\u3040-\u30ff]", text):  # Hiragana + Katakana
+            return "ja"
+        if re.search(r"[\u0400-\u04FF]", text):  # Cyrillic
+            return "ru"
+
+        # 檢查含重音的拉丁字母，粗略判斷西語/法語/德語
+        if re.search(r"[áéíóúñ¿¡]", text, re.IGNORECASE):
+            return "es"
+        if re.search(r"[àâçéèêëïîôùûüÿœ]", text, re.IGNORECASE):
+            return "fr"
+        if re.search(r"[äöüß]", text, re.IGNORECASE):
+            return "de"
+
+        # 大多數為 ASCII 字母則推英文
+        letters = re.findall(r"[A-Za-z]", text)
+        if letters and len(letters) / max(len(text), 1) > 0.4:
+            return "en"
+
+        return fallback
