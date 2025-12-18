@@ -1,6 +1,7 @@
 """Voice Agent - 整合 STT, LLM, 和 TTS 的高階介面。"""
 
 import re
+from dataclasses import dataclass
 from typing import Tuple, Optional, Iterator, Union
 import numpy as np
 
@@ -91,16 +92,97 @@ class VoiceAgent:
             return f"{base}\n\n{tool_desc}" if base else tool_desc
         return base
 
-    def _chat_with_history(self, user_text: str, system_prompt: Optional[str]) -> LLMResponse:
+    def _build_messages(self, user_text: str, system_prompt: Optional[str]) -> list[dict[str, str]]:
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.extend(self.conversation_history)
         messages.append({"role": "user", "content": user_text})
-        response = self.llm.chat(messages)
-        return response
+        return messages
 
-    # NOTE: emotion synthesis removed
+    def _chat_with_history(self, user_text: str, system_prompt: Optional[str]) -> LLMResponse:
+        return self.llm.chat(self._build_messages(user_text, system_prompt=system_prompt))
+
+    def _tool_followup_prompt(self) -> str:
+        # Keep prompt content consistent with previous behavior.
+        return (
+            "記帳工具已成功執行。\n\n"
+            "請用**繁體中文**簡短地告訴使用者記帳已完成。\n"
+            "例如：「已經幫你記錄了這筆消費！」\n"
+            "不要使用英文，不要重複工具的技術細節。"
+        )
+
+    def _run_tools_if_needed(self, llm_text: str) -> Optional[tuple[str, dict]]:
+        if not self.tool_manager:
+            return None
+        return self.tool_manager.parse_tool_call(llm_text)
+
+    def _execute_tool(self, tool_name: str, parameters: dict) -> str:
+        assert self.tool_manager is not None
+        return self.tool_manager.execute_tool(tool_name, **parameters)
+
+    def _chat_and_maybe_use_tool_batch(
+        self,
+        user_text: str,
+        system_prompt: Optional[str],
+    ) -> tuple[str, Optional[LLMResponse]]:
+        """Run LLM for one turn; if tool call present, execute tool and ask LLM for a final response.
+
+        Returns:
+            (final_text, llm_response)
+        """
+        llm_response: Optional[LLMResponse] = None
+        response_text = user_text
+
+        if not self.enable_llm:
+            return response_text, llm_response
+
+        llm_response = self._chat_with_history(user_text, system_prompt=system_prompt)
+        response_text = llm_response.content
+        print(f"[VoiceAgent] LLM response: '{response_text}'")
+
+        tool_call = self._run_tools_if_needed(response_text)
+        if tool_call:
+            tool_name, parameters = tool_call
+            print(f"[VoiceAgent] Executing tool: {tool_name}")
+            tool_result = self._execute_tool(tool_name, parameters)
+
+            follow_up_prompt = self._tool_followup_prompt()
+            llm_response = self._chat_with_history(follow_up_prompt, system_prompt=system_prompt)
+            response_text = llm_response.content
+            print(f"[VoiceAgent] Final response after tool: '{response_text}'")
+            return response_text, llm_response
+
+        # No tool call -> update history
+        self._append_history("user", user_text)
+        self._append_history("assistant", response_text)
+        return response_text, llm_response
+
+
+    @dataclass
+    class _SentenceSplitResult:
+        sentences: list[str]
+        remainder: str
+
+
+    def _split_sentences(text: str, sentence_delimiters: str) -> _SentenceSplitResult:
+        """Split text into complete sentences based on delimiters, leaving unfinished remainder."""
+        parts = re.split(f"({sentence_delimiters})", text)
+        sentences: list[str] = []
+        current = ""
+
+        for part in parts:
+            if not part:
+                continue
+            if re.match(sentence_delimiters, part):
+                current += part
+                if current.strip():
+                    sentences.append(current)
+                current = ""
+            else:
+                current += part
+
+        return VoiceAgent._SentenceSplitResult(sentences=sentences, remainder=current)
 
     def process_audio(
         self,
@@ -147,44 +229,11 @@ class VoiceAgent:
             return None, transcription if return_transcript else None, None
         
         # 2. LLM 生成回應（如果啟用）
-        llm_response = None
-        response_text = transcription.text
-        
-        if self.enable_llm:
-            system_prompt = self._build_system_prompt()
-            llm_response = self._chat_with_history(transcription.text, system_prompt=system_prompt)
-            response_text = llm_response.content
-            print(f"[VoiceAgent] LLM response: '{response_text}'")
-            
-            # 檢查是否需要執行工具
-            if self.tool_manager:
-                tool_call = self.tool_manager.parse_tool_call(response_text)
-                if tool_call:
-                    tool_name, parameters = tool_call
-                    print(f"[VoiceAgent] Executing tool: {tool_name}")
-                    
-                    # 執行工具
-                    tool_result = self.tool_manager.execute_tool(tool_name, **parameters)
-                    
-                    # 將工具結果告訴 LLM，讓它生成最終回應
-                    follow_up_prompt = (
-                        f"工具 '{tool_name}' 執行結果：\n"
-                        f"{tool_result}\n\n"
-                        f"請根據這個結果給使用者一個友善的回應。"
-                    )
-                    llm_response = self._chat_with_history(
-                        follow_up_prompt,
-                        system_prompt=system_prompt,
-                    )
-                    response_text = llm_response.content
-                    print(f"[VoiceAgent] Final response after tool: '{response_text}'")
-                else:
-                    # 無工具，對話加入記憶
-                    self._append_history("user", transcription.text)
-                    self._append_history("assistant", response_text)
-            else:
-                self._append_history("user", transcription.text)
-                self._append_history("assistant", response_text)
+        system_prompt = self._build_system_prompt() if self.enable_llm else None
+        response_text, llm_response = self._chat_and_maybe_use_tool_batch(
+            transcription.text,
+            system_prompt=system_prompt,
+        )
         
         if not response_text:
             print("[VoiceAgent] No text to synthesize")
@@ -258,43 +307,11 @@ class VoiceAgent:
         """批次模式：處理文字輸入（內部方法）。"""
         print(f"[VoiceAgent] Processing text input (batch mode): '{text}'")
         
-        # 1. LLM 生成回應（如果啟用）
-        response_text = text
-        if self.enable_llm:
-            system_prompt = self._build_system_prompt()
-            llm_response = self._chat_with_history(text, system_prompt=system_prompt)
-            response_text = llm_response.content
-            print(f"[VoiceAgent] LLM response: '{response_text}'")
-            
-            # 檢查是否需要執行工具
-            if self.tool_manager:
-                tool_call = self.tool_manager.parse_tool_call(response_text)
-                if tool_call:
-                    tool_name, parameters = tool_call
-                    print(f"[VoiceAgent] Executing tool: {tool_name}")
-                    
-                    # 執行工具
-                    tool_result = self.tool_manager.execute_tool(tool_name, **parameters)
-                    
-                    # 將工具結果告訴 LLM
-                    follow_up_prompt = (
-                        f"記帳工具已成功執行。\n\n"
-                        f"請用**繁體中文**簡短地告訴使用者記帳已完成。\n"
-                        f"例如：「已經幫你記錄了這筆消費！」\n"
-                        f"不要使用英文，不要重複工具的技術細節。"
-                    )
-                    llm_response = self._chat_with_history(
-                        follow_up_prompt,
-                        system_prompt=system_prompt,
-                    )
-                    response_text = llm_response.content
-                    print(f"[VoiceAgent] Final response after tool: '{response_text}'")
-                else:
-                    self._append_history("user", text)
-                    self._append_history("assistant", response_text)
-            else:
-                self._append_history("user", text)
-                self._append_history("assistant", response_text)
+        system_prompt = self._build_system_prompt() if self.enable_llm else None
+        response_text, _ = self._chat_and_maybe_use_tool_batch(
+            text,
+            system_prompt=system_prompt,
+        )
         
         # 2. 文字轉語音
         lang_to_use = self._detect_language_from_text(response_text, fallback=None)
@@ -341,51 +358,42 @@ class VoiceAgent:
         buffer = ""  # 累積未完成的句子
         full_response = ""  # 累積完整回應（用於檢查工具調用）
         tool_call_detected = False  # 標記是否偵測到工具調用
-        
-        # 流式獲取 LLM 回應
-        messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.extend(self.conversation_history)
-        messages.append({"role": "user", "content": prompt})
 
+        messages = self._build_messages(prompt, system_prompt=system_prompt)
         spoken_response = ""
 
         for chunk in self.llm.chat_stream(messages, system_prompt=None):
             buffer += chunk
             full_response += chunk
-            
+
             # 先檢查是否已經出現工具調用的開始標記
             if use_tools and "```tool" in full_response and not tool_call_detected:
                 tool_call_detected = True
                 print("[VoiceAgent] Detected tool call marker, accumulating full response...")
-            
+
             # 如果偵測到工具調用，繼續累積不要 TTS
             if tool_call_detected:
                 continue
-            
-            # 檢查是否有完整的句子（如果沒有工具調用）
-            sentences = self._extract_sentences(buffer)
-            
-            for sentence in sentences:
-                if len(sentence.strip()) >= self.min_sentence_length:
-                    print(f"[VoiceAgent] Synthesizing sentence: '{sentence}'")
-                    
-                    # 立即合成這個句子
-                    try:
-                        lang_to_use = self._detect_language_from_text(sentence, fallback=None)
-                        tts_result = self._synthesize(
-                            text=sentence,
-                            language=lang_to_use,
-                        )
-                        yield tts_result, sentence
-                        spoken_response += sentence
-                    except Exception as e:
-                        print(f"[VoiceAgent] TTS failed for sentence: {e}")
-                        continue
-                    
-                    # 從 buffer 中移除已處理的句子
-                    buffer = buffer.replace(sentence, "", 1).lstrip()
+
+            split_result = VoiceAgent._split_sentences(buffer, self.sentence_delimiters)
+            buffer = split_result.remainder
+
+            for sentence in split_result.sentences:
+                if len(sentence.strip()) < self.min_sentence_length:
+                    continue
+
+                print(f"[VoiceAgent] Synthesizing sentence: '{sentence}'")
+                try:
+                    lang_to_use = self._detect_language_from_text(sentence, fallback=None)
+                    tts_result = self._synthesize(
+                        text=sentence,
+                        language=lang_to_use,
+                    )
+                    yield tts_result, sentence
+                    spoken_response += sentence
+                except Exception as e:
+                    print(f"[VoiceAgent] TTS failed for sentence: {e}")
+                    continue
         
         # 檢查是否有工具調用（優先處理）
         if use_tools and self.tool_manager:
@@ -397,40 +405,35 @@ class VoiceAgent:
                 # 執行工具
                 tool_result = self.tool_manager.execute_tool(tool_name, **parameters)
                 
-                # 將工具結果告訴 LLM，讓它生成最終回應
-                follow_up_prompt = (
-                    f"記帳工具已成功執行。\n\n"
-                    f"請用**繁體中文**簡短地告訴使用者記帳已完成。\n"
-                    f"例如：「已經幫你記錄了這筆消費！」\n"
-                    f"不要使用英文，不要重複工具的技術細節。"
-                )
+                follow_up_prompt = self._tool_followup_prompt()
                 
+                follow_up_messages: list[dict[str, str]] = []
+                if system_prompt:
+                    follow_up_messages.append({"role": "system", "content": system_prompt})
+                follow_up_messages.extend(self.conversation_history)
+                follow_up_messages.append({"role": "assistant", "content": full_response})
+                follow_up_messages.append({"role": "user", "content": follow_up_prompt})
+
                 # 流式生成工具執行後的回應
                 buffer = ""
-                for chunk in self.llm.chat_stream(
-                    [
-                        *(messages if system_prompt else self.conversation_history),
-                        {"role": "assistant", "content": full_response},
-                        {"role": "user", "content": follow_up_prompt},
-                    ],
-                    system_prompt=None,
-                ):
+                for chunk in self.llm.chat_stream(follow_up_messages, system_prompt=None):
                     buffer += chunk
-                    sentences = self._extract_sentences(buffer)
-                    
-                    for sentence in sentences:
-                        if len(sentence.strip()) >= self.min_sentence_length:
-                            try:
-                                tts_result = self._synthesize(
-                                    text=sentence,
-                                    language=language,
-                                )
-                                yield tts_result, sentence
-                                spoken_response += sentence
-                            except Exception as e:
-                                print(f"[VoiceAgent] TTS failed: {e}")
-                                continue
-                            buffer = buffer.replace(sentence, "", 1).lstrip()
+                    split_result = VoiceAgent._split_sentences(buffer, self.sentence_delimiters)
+                    buffer = split_result.remainder
+
+                    for sentence in split_result.sentences:
+                        if len(sentence.strip()) < self.min_sentence_length:
+                            continue
+                        try:
+                            tts_result = self._synthesize(
+                                text=sentence,
+                                language=language,
+                            )
+                            yield tts_result, sentence
+                            spoken_response += sentence
+                        except Exception as e:
+                            print(f"[VoiceAgent] TTS failed: {e}")
+                            continue
                 
                 # 處理最後的 buffer
                 if buffer.strip() and len(buffer.strip()) >= self.min_sentence_length:
@@ -471,34 +474,8 @@ class VoiceAgent:
             self._append_history("assistant", spoken_response)
     
     def _extract_sentences(self, text: str) -> list[str]:
-        """
-        從文字中提取完整的句子。
-        
-        Args:
-            text: 輸入文字
-            
-        Returns:
-            完整句子的列表
-        """
-        # 使用正則表達式分割句子
-        # 保留分隔符
-        parts = re.split(f'({self.sentence_delimiters})', text)
-        
-        sentences = []
-        current_sentence = ""
-        
-        for i, part in enumerate(parts):
-            if re.match(self.sentence_delimiters, part):
-                # 這是一個分隔符，加到當前句子並完成
-                current_sentence += part
-                if current_sentence.strip():
-                    sentences.append(current_sentence)
-                current_sentence = ""
-            else:
-                # 這是句子內容
-                current_sentence += part
-        
-        return sentences
+        """從文字中提取完整的句子（保留舊 API，供相容/除錯使用）。"""
+        return VoiceAgent._split_sentences(text, self.sentence_delimiters).sentences
     
     def transcribe_audio(self, audio: Tuple[int, np.ndarray]) -> TranscriptionResult:
         """
