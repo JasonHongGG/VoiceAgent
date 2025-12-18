@@ -9,7 +9,6 @@ from modules.tts import CoquiTTS
 from modules.llm import OllamaLLM
 from modules.agent import VoiceAgent
 from modules.tools import ToolManager, AccountingAgentWebHook
-from modules.utils.emotion_manager import EmotionManager
 
 
 # Cached prompt configuration loaded from JSON (prompts.json by default)
@@ -87,8 +86,8 @@ def initialize_tts_engine():
         )
 
     if engine in {"vibevoice", "vibevoice-realtime"}:
-        # Lazy import so users don't need VibeVoice deps unless they opt-in.
-        from modules.tts.vibevoice_tts import VibeVoiceTTS
+        # Lazy import 
+        from modules.tts import VibeVoiceTTS
 
         return VibeVoiceTTS(
             model_path=os.getenv("VIBEVOICE_MODEL_PATH", "microsoft/VibeVoice-Realtime-0.5B"),
@@ -118,18 +117,11 @@ def initialize_tool_manager():
     return tool_manager
 
 
-def initialize_emotion_manager():
-    """初始化情感管理器。"""
-    emotion_audio_dir = os.getenv("EMOTION_AUDIO_DIR", "resource/emotions")
-    return EmotionManager(emotion_audio_dir=emotion_audio_dir)
-
-
 def initialize_voice_agent(
     stt_engine, 
     llm_engine, 
     tts_engine, 
     tool_manager, 
-    emotion_manager=None,
 ):
     """初始化 Voice Agent。
     
@@ -138,8 +130,6 @@ def initialize_voice_agent(
         llm_engine: LLM 引擎實例
         tts_engine: TTS 引擎實例
         tool_manager: 工具管理器實例
-        emotion_manager: 情感管理器實例（可選）
-    
     Returns:
         配置好的 VoiceAgent 實例
     """
@@ -148,7 +138,6 @@ def initialize_voice_agent(
         llm_engine=llm_engine,
         tts_engine=tts_engine,
         tool_manager=tool_manager,
-        emotion_manager=emotion_manager,
         enable_llm=True,
         sentence_delimiters=r'[。！？\.!?;；\n]',
         min_sentence_length=5,
@@ -167,12 +156,10 @@ def setup_voice_agent():
     llm_engine = initialize_llm_engine()
     tts_engine = initialize_tts_engine()
     tool_manager = initialize_tool_manager()
-    emotion_manager = initialize_emotion_manager()
     
     return initialize_voice_agent(
         stt_engine, 
         llm_engine, 
         tts_engine, 
         tool_manager,
-        emotion_manager,
     )

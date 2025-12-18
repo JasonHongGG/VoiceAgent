@@ -58,11 +58,11 @@ class VibeVoiceTTS(TTSEngine):
     def __init__(
         self,
         model_path: str = "microsoft/VibeVoice-Realtime-0.5B",
-        device: Optional[str] = None,
-        voice: Optional[str] = None,
+        device: str = "cpu",
+        voice: str = None,
         cfg_scale: float = 1.5,
         ddpm_steps: int = 5,
-        voices_dir: Optional[str] = None,
+        voices_dir: str = None,
     ):
         ensure_vibevoice_importable()
 
@@ -70,21 +70,16 @@ class VibeVoiceTTS(TTSEngine):
         self.cfg_scale = float(cfg_scale)
         self.ddpm_steps = int(ddpm_steps)
 
-        if device is None:
-            device = os.getenv("DEVICE", "cuda")
+        # Device config
+        self.device = device
         self._device_cfg = _resolve_device_config(device)
 
-        if voices_dir is None:
-            # Default to this repo's resources folder (preferred), falling back to bundled VibeVoice demo assets.
-            repo_root = Path(__file__).resolve().parents[2]
-            voices_dir = repo_root / "resources" / "voices" / "streaming_model"
-        voices_path = Path(voices_dir)
-        if not voices_path.is_absolute():
-            # Make relative paths stable regardless of process CWD.
-            voices_path = (Path(__file__).resolve().parents[2] / voices_path).resolve()
+        # Voice preset mapper
+        REPO_ROOT = Path(__file__).resolve().parents[2]
+        voices_path = (REPO_ROOT / voices_dir).resolve()
         self._voice_mapper = VoicePresetMapper(voices_path)
 
-        self._current_voice_name = (voice or os.getenv("VIBEVOICE_VOICE") or "").strip().lower() or None
+        self._current_voice_name = voice.strip().lower() or None
         self._cached_prompt: Optional[dict] = None
 
         print(
@@ -154,10 +149,9 @@ class VibeVoiceTTS(TTSEngine):
         print(f"[VibeVoiceTTS] Ready. sample_rate={self._sample_rate}, voices={len(self._voice_mapper.list())}")
 
     def _load_cached_prompt_for_voice(self, voice_name: Optional[str]) -> None:
-        target_device = self._device_cfg.device if self._device_cfg.device != "cpu" else "cpu"
         voice_pt = self._voice_mapper.resolve(voice_name)
         self._current_voice_name = voice_pt.stem.lower()
-        self._cached_prompt = torch.load(str(voice_pt), map_location=target_device, weights_only=False)
+        self._cached_prompt = torch.load(str(voice_pt), map_location=self._device_cfg.device, weights_only=False)
         print(f"[VibeVoiceTTS] Using voice preset: {self._current_voice_name} ({voice_pt})")
 
     def synthesize(

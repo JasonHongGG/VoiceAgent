@@ -242,48 +242,6 @@ result = tts.synthesize(
 )
 ```
 
-### 範例 4: 整合到 EmotionManager
-
-```python
-from modules.utils.emotion_manager import EmotionManager
-
-class EnhancedEmotionManager(EmotionManager):
-    """增強版情感管理器，支援參數配置。"""
-    
-    EMOTION_PARAMS = {
-        "happy": {
-            "temperature": 1.0,
-            "speed": 1.1,
-            "repetition_penalty": 8.0,
-        },
-        "sad": {
-            "temperature": 0.7,
-            "speed": 0.85,
-            "repetition_penalty": 12.0,
-        },
-        # ...
-    }
-    
-    def get_emotion_config(self, emotion: str) -> dict:
-        """取得情感的完整配置（音訊 + 參數）。"""
-        return {
-            "speaker_wav": self.get_emotion_audio(emotion),
-            **self.EMOTION_PARAMS.get(emotion, {})
-        }
-
-# 使用
-emotion_mgr = EnhancedEmotionManager()
-config = emotion_mgr.get_emotion_config("happy")
-
-result = tts.synthesize(
-    text="太好了！",
-    language="zh-cn",
-    **config
-)
-```
-
----
-
 ## ⚙️ 調試技巧
 
 ### 1. 測試不同參數組合
