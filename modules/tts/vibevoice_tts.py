@@ -21,9 +21,9 @@ import numpy as np
 import torch
 
 from .base import TTSEngine, TTSResult
-from .vibevoice.bootstrap import ensure_vibevoice_importable
-from .vibevoice.imports import get_vibevoice_classes
 from .vibevoice.voice_presets import VoicePresetMapper
+from .vibevoice.modular.modeling_vibevoice_streaming_inference import VibeVoiceStreamingForConditionalGenerationInference
+from .vibevoice.processor.vibevoice_streaming_processor import VibeVoiceStreamingProcessor
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ class VibeVoiceTTS(TTSEngine):
         ddpm_steps: int = 5,
         voices_dir: str = None,
     ):
-        ensure_vibevoice_importable()
+        # ensure_vibevoice_importable()
 
         self.model_path = model_path
         self.cfg_scale = float(cfg_scale)
@@ -80,7 +80,7 @@ class VibeVoiceTTS(TTSEngine):
         self._voice_mapper = VoicePresetMapper(voices_path)
 
         self._current_voice_name = voice.strip().lower() or None
-        self._cached_prompt: Optional[dict] = None
+        self._cached_voice_preset: Optional[dict] = None
 
         print(
             "[VibeVoiceTTS] Initializing model='{}' on device='{}' (dtype={}, attn={}, cfg_scale={}, ddpm_steps={})".format(
@@ -93,8 +93,7 @@ class VibeVoiceTTS(TTSEngine):
             )
         )
 
-        VibeVoiceStreamingForConditionalGenerationInference, VibeVoiceStreamingProcessor = get_vibevoice_classes()
-
+        # Load processor
         self.processor = VibeVoiceStreamingProcessor.from_pretrained(self.model_path)
 
         # Load model with conservative fallbacks (mirrors demo logic)
@@ -142,16 +141,16 @@ class VibeVoiceTTS(TTSEngine):
         self.model.set_ddpm_inference_steps(num_steps=self.ddpm_steps)
 
         # Prime cached prompt
-        self._load_cached_prompt_for_voice(self._current_voice_name)
+        self._load_voice_preset(self._current_voice_name)
 
         self._languages = ["en", "zh"]
         self._sample_rate = int(getattr(self.processor.audio_processor, "sampling_rate", 24000))
         print(f"[VibeVoiceTTS] Ready. sample_rate={self._sample_rate}, voices={len(self._voice_mapper.list())}")
 
-    def _load_cached_prompt_for_voice(self, voice_name: Optional[str]) -> None:
+    def _load_voice_preset(self, voice_name: Optional[str]) -> None:
         voice_pt = self._voice_mapper.resolve(voice_name)
         self._current_voice_name = voice_pt.stem.lower()
-        self._cached_prompt = torch.load(str(voice_pt), map_location=self._device_cfg.device, weights_only=False)
+        self._cached_voice_preset = torch.load(str(voice_pt), map_location=self._device_cfg.device, weights_only=False)
         print(f"[VibeVoiceTTS] Using voice preset: {self._current_voice_name} ({voice_pt})")
 
     def synthesize(
@@ -173,10 +172,10 @@ class VibeVoiceTTS(TTSEngine):
         if speaker:
             requested = speaker.strip().lower()
             if requested and requested != self._current_voice_name:
-                self._load_cached_prompt_for_voice(requested)
+                self._load_voice_preset(requested)
 
-        if self._cached_prompt is None:
-            self._load_cached_prompt_for_voice(self._current_voice_name)
+        if self._cached_voice_preset is None:
+            self._load_voice_preset(self._current_voice_name)
 
         cleaned = (
             text.replace("’", "'")
@@ -187,16 +186,15 @@ class VibeVoiceTTS(TTSEngine):
 
         inputs = self.processor.process_input_with_cached_prompt(
             text=cleaned,
-            cached_prompt=self._cached_prompt,
+            cached_prompt=self._cached_voice_preset,
             padding=True,
             return_tensors="pt",
             return_attention_mask=True,
         )
 
-        target_device = self._device_cfg.device if self._device_cfg.device != "cpu" else "cpu"
         for key, value in list(inputs.items()):
             if torch.is_tensor(value):
-                inputs[key] = value.to(target_device)
+                inputs[key] = value.to(self._device_cfg.device)
 
         with torch.inference_mode():
             outputs = self.model.generate(
@@ -206,7 +204,7 @@ class VibeVoiceTTS(TTSEngine):
                 tokenizer=self.processor.tokenizer,
                 generation_config={"do_sample": False},
                 verbose=False,
-                all_prefilled_outputs=copy.deepcopy(self._cached_prompt),
+                all_prefilled_outputs=copy.deepcopy(self._cached_voice_preset),
             )
 
         if not getattr(outputs, "speech_outputs", None) or outputs.speech_outputs[0] is None:

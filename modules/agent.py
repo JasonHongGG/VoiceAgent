@@ -84,9 +84,9 @@ class VoiceAgent:
     def _append_history(self, role: str, content: str) -> None:
         self.conversation_history.append({"role": role, "content": content})
 
-    def _build_system_prompt(self, include_tools: bool) -> str:
+    def _build_system_prompt(self) -> str:
         base = getattr(self.llm, "default_system_prompt", None) or ""
-        if include_tools and self.tool_manager and self.tool_manager.has_tools():
+        if self.tool_manager and self.tool_manager.has_tools():
             tool_desc = self.tool_manager.get_tools_description()
             return f"{base}\n\n{tool_desc}" if base else tool_desc
         return base
@@ -151,7 +151,7 @@ class VoiceAgent:
         response_text = transcription.text
         
         if self.enable_llm:
-            system_prompt = self._build_system_prompt(include_tools=bool(self.tool_manager))
+            system_prompt = self._build_system_prompt()
             llm_response = self._chat_with_history(transcription.text, system_prompt=system_prompt)
             response_text = llm_response.content
             print(f"[VoiceAgent] LLM response: '{response_text}'")
@@ -261,7 +261,7 @@ class VoiceAgent:
         # 1. LLM 生成回應（如果啟用）
         response_text = text
         if self.enable_llm:
-            system_prompt = self._build_system_prompt(include_tools=bool(self.tool_manager))
+            system_prompt = self._build_system_prompt()
             llm_response = self._chat_with_history(text, system_prompt=system_prompt)
             response_text = llm_response.content
             print(f"[VoiceAgent] LLM response: '{response_text}'")
@@ -334,7 +334,7 @@ class VoiceAgent:
         """
         use_tools = bool(self.tool_manager and self.tool_manager.has_tools())
 
-        system_prompt = self._build_system_prompt(include_tools=use_tools)
+        system_prompt = self._build_system_prompt()
         if use_tools:
             print(f"[VoiceAgent] Using system prompt with {len(self.tool_manager)} tools")
         
