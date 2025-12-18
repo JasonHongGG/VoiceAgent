@@ -8,6 +8,7 @@ from .llm.base import LLMEngine, LLMResponse
 # Implementations
 from .stt.whisper_stt import WhisperSTT
 from .tts.coqui_tts import CoquiTTS
+from .tts.vibevoice_tts import VibeVoiceTTS
 from .llm.ollama_llm import OllamaLLM
 
 # High-level agent
@@ -32,6 +33,7 @@ __all__ = [
     # Implementations
     "WhisperSTT",
     "CoquiTTS",
+    "VibeVoiceTTS",
     "OllamaLLM",
     # Agent
     "VoiceAgent",

@@ -1,0 +1,19 @@
+# Optional deps for using VibeVoice as a TTS backend.
+# Install with:
+#   pip install -r requirements.txt -r requirements-vibevoice.txt
+
+accelerate==1.6.0
+transformers==4.51.3
+diffusers
+tqdm
+
+# audio i/o
+soundfile
+scipy
+librosa
+
+# vibevoice deps listed upstream
+ml-collections
+absl-py
+numba>=0.57.0
+llvmlite>=0.40.0

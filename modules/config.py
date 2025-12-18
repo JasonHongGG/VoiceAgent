@@ -39,6 +39,10 @@ def load_prompt_config() -> dict:
 
     # Fallback to environment values if JSON missing fields
     config.setdefault(
+        "language",
+        "zh-cn",
+    )
+    config.setdefault(
         "system_prompt",
         "你是一個聊天助手，對於使用者的問題提供資訊和建議，請用簡短的繁體中文句子回覆。",
     )
@@ -74,10 +78,31 @@ def initialize_llm_engine():
 
 def initialize_tts_engine():
     """初始化 TTS (Text-to-Speech) 引擎。"""
-    return CoquiTTS(
-        model_name=os.getenv("TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2"),
-        device=os.getenv("DEVICE", "cuda").lower(),
+    engine = (os.getenv("TTS_ENGINE", "coqui") or "coqui").strip().lower()
+
+    if engine in {"coqui", "xtts", "coqui-tts"}:
+        return CoquiTTS(
+            model_name=os.getenv("TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2"),
+            device=os.getenv("DEVICE", "cuda").lower(),
+        )
+
+    if engine in {"vibevoice", "vibevoice-realtime"}:
+        # Lazy import so users don't need VibeVoice deps unless they opt-in.
+        from modules.tts.vibevoice_tts import VibeVoiceTTS
+
+        return VibeVoiceTTS(
+            model_path=os.getenv("VIBEVOICE_MODEL_PATH", "microsoft/VibeVoice-Realtime-0.5B"),
+            device=os.getenv("DEVICE", "cuda").lower(),
+            voice=os.getenv("VIBEVOICE_VOICE"),
+            cfg_scale=float(os.getenv("VIBEVOICE_CFG_SCALE", "1.5")),
+            ddpm_steps=int(os.getenv("VIBEVOICE_DDPM_STEPS", "5")),
+            voices_dir=os.getenv("VIBEVOICE_VOICES_DIR"),
+        )
+
+    raise ValueError(
+        f"Unknown TTS_ENGINE='{engine}'. Supported: coqui, vibevoice"
     )
+
 
 
 def initialize_tool_manager():

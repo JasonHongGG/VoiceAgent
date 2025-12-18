@@ -216,6 +216,24 @@ tts = CoquiTTS(
     device="cuda",  # cuda 或 cpu
     reference_speaker="path/to/speaker.wav",  # 可選
 )
+
+#### 使用 VibeVoice（額外選項）
+
+VibeVoice 需要額外依賴與模型權重（預設從 Hugging Face 下載 `microsoft/VibeVoice-Realtime-0.5B`）。
+
+```bash
+pip install -r requirements.txt -r requirements-vibevoice.txt
+```
+
+用環境變數切換：
+
+```bash
+export TTS_ENGINE=vibevoice
+export VIBEVOICE_MODEL_PATH=microsoft/VibeVoice-Realtime-0.5B
+export VIBEVOICE_VOICE=en-emma_woman   # 對應 ./VibeVoice/demo/voices/streaming_model/*.pt
+export VIBEVOICE_CFG_SCALE=1.5
+export VIBEVOICE_DDPM_STEPS=5
+```
 ```
 
 ### 情感語音整合
