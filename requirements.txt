@@ -1,6 +1,5 @@
 fastrtc
 faster-whisper
-coqui-tts
 python-dotenv
 requests
 gradio

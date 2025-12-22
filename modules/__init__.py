@@ -7,7 +7,6 @@ from .llm.base import LLMEngine, LLMResponse
 
 # Implementations
 from .stt.whisper_stt import WhisperSTT
-from .tts.coqui_tts import CoquiTTS
 from .tts.chatterbox_tts import ChatterboxTTS
 
 # Optional: VibeVoice has extra pinned deps. Keep import lazy/optional.
@@ -38,7 +37,6 @@ __all__ = [
     "LLMResponse",
     # Implementations
     "WhisperSTT",
-    "CoquiTTS",
     "ChatterboxTTS",
     "VibeVoiceTTS",
     "OllamaLLM",

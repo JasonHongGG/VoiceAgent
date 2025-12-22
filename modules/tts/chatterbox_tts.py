@@ -20,7 +20,6 @@ import torch
 
 from .base import TTSEngine, TTSResult
 
-
 def _resolve_device(device: Optional[str]) -> str:
     requested = (device or "").strip().lower() or None
     if requested in {"gpu"}:
@@ -72,26 +71,20 @@ class ChatterboxTTS(TTSEngine):
         self,
         device: Optional[str] = None,
         audio_prompt_path: Optional[str] = None,
-        # Match upstream defaults to minimize behavior differences.
-        repetition_penalty: float = 2.0,
-        min_p: float = 0.05,
-        top_p: float = 1.0,
-        temperature: float = 0.8,
-        exaggeration: float = 0.5,
-        cfg_weight: float = 0.5,
     ):
         self.device = _resolve_device(device)
 
-        # Generation defaults (can be overridden per-call via kwargs).
-        self.repetition_penalty = float(repetition_penalty)
-        self.min_p = float(min_p)
-        self.top_p = float(top_p)
-        self.temperature = float(temperature)
-        self.exaggeration = float(exaggeration)
-        self.cfg_weight = float(cfg_weight)
-
         # Optional voice reference prompt
         self.audio_prompt_path = audio_prompt_path
+
+        # Generation tuning (env-driven; keep public API minimal)
+        # Defaults match upstream examples to minimize behavior differences.
+        self.repetition_penalty = float(os.getenv("CHATTERBOX_REPETITION_PENALTY", 2.0))
+        self.min_p = float(os.getenv("CHATTERBOX_MIN_P", 0.05))
+        self.top_p = float(os.getenv("CHATTERBOX_TOP_P", 1.0))
+        self.temperature = float(os.getenv("CHATTERBOX_TEMPERATURE", 0.8))
+        self.exaggeration = float(os.getenv("CHATTERBOX_EXAGGERATION", 0.5))
+        self.cfg_weight = float(os.getenv("CHATTERBOX_CFG_WEIGHT", 0.5))
 
         print(f"[ChatterboxTTS] Initializing multilingual model on device='{self.device}'...")
 
@@ -106,42 +99,24 @@ class ChatterboxTTS(TTSEngine):
         self._sample_rate = int(getattr(self._tts, "sr", 24000))
         print(f"[ChatterboxTTS] Ready. sample_rate={self._sample_rate}, languages={len(self._languages)}")
 
-    def _resolve_audio_prompt(
-        self,
-        speaker: Optional[str],
-        speaker_wav: Optional[str],
-    ) -> Optional[str]:
-        # 1) explicit speaker_wav kwarg
-        if speaker_wav and Path(speaker_wav).is_file():
-            return speaker_wav
-
-        # 2) treat speaker as an audio prompt path if it looks like a file
-        if speaker and Path(speaker).is_file():
-            return speaker
-
-        # 3) explicit engine setting
+    def _resolve_audio_prompt(self) -> Optional[str]:
+        # 1) explicit engine setting
         if self.audio_prompt_path and Path(self.audio_prompt_path).is_file():
             return self.audio_prompt_path
 
-        # 4) env var overrides
+        # 2) env var overrides
         env_prompt = os.getenv("CHATTERBOX_AUDIO_PROMPT")
         if env_prompt and Path(env_prompt).is_file():
             return env_prompt
 
-        # 5) reuse existing coqui env var if set
+        # 3) reuse legacy env var name if set
         ref = os.getenv("TTS_SPEAKER_WAV")
         if ref and Path(ref).is_file():
             return ref
 
         return None
 
-    def synthesize(
-        self,
-        text: str,
-        language: Optional[str] = None,
-        speaker: Optional[str] = None,
-        **kwargs,
-    ) -> TTSResult:
+    def synthesize(self, text: str, language: Optional[str] = None) -> TTSResult:
         language_id = _normalize_language_id(language)
         if language_id not in set(self._languages):
             raise ValueError(
@@ -152,27 +127,19 @@ class ChatterboxTTS(TTSEngine):
         if not text:
             return TTSResult(audio=np.zeros((0,), dtype=np.float32), sample_rate=self._sample_rate)
 
-        speaker_wav = kwargs.get("speaker_wav")
-        audio_prompt_path = self._resolve_audio_prompt(speaker=speaker, speaker_wav=speaker_wav)
-
-        repetition_penalty = float(kwargs.get("repetition_penalty", self.repetition_penalty))
-        min_p = float(kwargs.get("min_p", self.min_p))
-        top_p = float(kwargs.get("top_p", self.top_p))
-        temperature = float(kwargs.get("temperature", self.temperature))
-        exaggeration = float(kwargs.get("exaggeration", self.exaggeration))
-        cfg_weight = float(kwargs.get("cfg_weight", self.cfg_weight))
+        audio_prompt_path = self._resolve_audio_prompt()
 
         with torch.inference_mode():
             wav = self._tts.generate(
                 text=text,
                 language_id=language_id,
                 audio_prompt_path=audio_prompt_path,
-                exaggeration=exaggeration,
-                cfg_weight=cfg_weight,
-                temperature=temperature,
-                repetition_penalty=repetition_penalty,
-                min_p=min_p,
-                top_p=top_p,
+                exaggeration=self.exaggeration,
+                cfg_weight=self.cfg_weight,
+                temperature=self.temperature,
+                repetition_penalty=self.repetition_penalty,
+                min_p=self.min_p,
+                top_p=self.top_p,
             )
 
         # Upstream returns torch.Tensor shaped (1, n). Convert to 1D float32.
@@ -185,10 +152,3 @@ class ChatterboxTTS(TTSEngine):
             audio = np.asarray(audio).reshape(-1).astype(np.float32)
 
         return TTSResult(audio=audio, sample_rate=self._sample_rate)
-
-    def get_supported_languages(self) -> list[str]:
-        return self._languages.copy()
-
-    def get_supported_speakers(self) -> list[str]:
-        # Chatterbox doesn't expose a built-in preset list; voice can be conditioned by an audio prompt.
-        return []

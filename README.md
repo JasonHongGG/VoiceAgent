@@ -28,13 +28,13 @@ pip install -r requirements.txt
 ### 基本使用（推薦）
 
 ```python
-from modules import VoiceAgent, WhisperSTT, OllamaLLM, CoquiTTS
+from modules import VoiceAgent, WhisperSTT, OllamaLLM, ChatterboxTTS
 
 # 建立 Agent（使用預設串流模式）
 agent = VoiceAgent(
-    stt=WhisperSTT(),
-    llm=OllamaLLM(),
-    tts=CoquiTTS(),
+    stt_engine=WhisperSTT(),
+    llm_engine=OllamaLLM(),
+    tts_engine=ChatterboxTTS(),
 )
 
 # 處理文字輸入（串流模式）
@@ -48,9 +48,9 @@ for tts_result, sentence in agent.process_text("你好，今天天氣如何？")
 ```python
 # 如需等待完整回應，使用批次模式
 agent = VoiceAgent(
-    stt=WhisperSTT(),
-    llm=OllamaLLM(),
-    tts=CoquiTTS(),
+    stt_engine=WhisperSTT(),
+    llm_engine=OllamaLLM(),
+    tts_engine=ChatterboxTTS(),
     enable_streaming=False,  # 批次模式
 )
 
@@ -80,9 +80,9 @@ tool_manager.register_tool(AccountingAgentWebHook())
 
 # 建立帶工具的 Agent
 agent = VoiceAgent(
-    stt=WhisperSTT(),
-    llm=OllamaLLM(),
-    tts=CoquiTTS(),
+    stt_engine=WhisperSTT(),
+    llm_engine=OllamaLLM(),
+    tts_engine=ChatterboxTTS(),
     tool_manager=tool_manager,
 )
 
@@ -104,7 +104,8 @@ fastRTC/
 │   │   └── ollama_llm.py    # Ollama 實作
 │   ├── tts/                  # 語音合成
 │   │   ├── base.py          # TTS 基礎介面
-│   │   └── coqui_tts.py     # Coqui 實作
+│   │   ├── chatterbox_tts.py # Chatterbox 實作
+│   │   └── vibevoice_tts.py  # VibeVoice 實作（可選）
 │   ├── tools/                # 工具系統
 │   │   ├── base.py          # 工具基礎介面
 │   │   ├── manager.py       # 工具管理器
@@ -122,12 +123,12 @@ fastRTC/
 ### 1. 基本對話
 
 ```python
-from modules import VoiceAgent, WhisperSTT, OllamaLLM, CoquiTTS
+from modules import VoiceAgent, WhisperSTT, OllamaLLM, ChatterboxTTS
 
 agent = VoiceAgent(
-    stt=WhisperSTT(),
-    llm=OllamaLLM(),
-    tts=CoquiTTS(),
+    stt_engine=WhisperSTT(),
+    llm_engine=OllamaLLM(),
+    tts_engine=ChatterboxTTS(),
 )
 
 for tts_result, sentence in agent.process_text("介紹一下你自己"):
@@ -209,14 +210,6 @@ llm = OllamaLLM(
 
 ### TTS（語音合成）
 
-```python
-from modules import CoquiTTS
-
-tts = CoquiTTS(
-    device="cuda",  # cuda 或 cpu
-    reference_speaker="path/to/speaker.wav",  # 可選
-)
-
 #### 使用 Chatterbox（支援中文/日文等 23+ 語言）
 
 安裝：
@@ -233,10 +226,15 @@ export TTS_ENGINE=chatterbox
 # （可選）提供 5-10 秒左右的參考音檔做 zero-shot voice cloning
 export CHATTERBOX_AUDIO_PROMPT=/path/to/ref.wav
 
-# （可選）控制風格
+# （可選）控制生成（由環境變數提供，wrapper 會在初始化時讀取）
+export CHATTERBOX_REPETITION_PENALTY=2.0
+export CHATTERBOX_MIN_P=0.05
+export CHATTERBOX_TOP_P=1.0
+export CHATTERBOX_TEMPERATURE=0.8
 export CHATTERBOX_EXAGGERATION=0.5
 export CHATTERBOX_CFG_WEIGHT=0.5
-export CHATTERBOX_TEMPERATURE=0.8
+
+# Wrapper 介面保持精簡，不把這些旋鈕做成 Python 參數。
 ```
 
 在程式呼叫時，`VoiceAgent` 會根據文字自動偵測語言並傳入 `language`（例如 `zh` / `ja`）。
@@ -306,7 +304,7 @@ MIT License
 ## 🙏 致謝
 
 - [Faster-Whisper](https://github.com/guillaumekln/faster-whisper) - STT 引擎
-- [Coqui TTS](https://github.com/coqui-ai/TTS) - TTS 引擎  
+- [Chatterbox](https://github.com/resemble-ai/chatterbox) - TTS 引擎
 - [Ollama](https://ollama.ai/) - LLM 服務
 - [FastRTC](https://github.com/gptlink/fastrtc) - WebRTC 框架
 

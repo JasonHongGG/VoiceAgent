@@ -1,7 +1,6 @@
 """TTS module initialization."""
 
 from .base import TTSEngine, TTSResult
-from .coqui_tts import CoquiTTS
 from .chatterbox_tts import ChatterboxTTS
 
 # VibeVoice is an optional backend with pinned deps in requirements-vibevoice.txt.
@@ -11,5 +10,5 @@ try:
 except Exception:  # pragma: no cover
 	VibeVoiceTTS = None  # type: ignore
 
-__all__ = ["TTSEngine", "TTSResult", "CoquiTTS", "ChatterboxTTS", "VibeVoiceTTS"]
+__all__ = ["TTSEngine", "TTSResult", "ChatterboxTTS", "VibeVoiceTTS"]
 

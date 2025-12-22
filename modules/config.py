@@ -5,7 +5,6 @@ import json
 from dotenv import load_dotenv
 
 from modules.stt import WhisperSTT
-from modules.tts import CoquiTTS
 from modules.llm import OllamaLLM
 from modules.agent import VoiceAgent
 from modules.tools import ToolManager, AccountingAgentWebHook
@@ -77,13 +76,7 @@ def initialize_llm_engine():
 
 def initialize_tts_engine():
     """初始化 TTS (Text-to-Speech) 引擎。"""
-    engine = (os.getenv("TTS_ENGINE", "coqui") or "coqui").strip().lower()
-
-    if engine in {"coqui", "xtts", "coqui-tts"}:
-        return CoquiTTS(
-            model_name=os.getenv("TTS_MODEL", "tts_models/multilingual/multi-dataset/xtts_v2"),
-            device=os.getenv("DEVICE", "cuda").lower(),
-        )
+    engine = (os.getenv("TTS_ENGINE", "chatterbox") or "chatterbox").strip().lower()
 
     if engine in {"vibevoice", "vibevoice-realtime"}:
         # Lazy import 
@@ -93,8 +86,6 @@ def initialize_tts_engine():
             model_path=os.getenv("VIBEVOICE_MODEL_PATH", "microsoft/VibeVoice-Realtime-0.5B"),
             device=os.getenv("DEVICE", "cuda").lower(),
             voice=os.getenv("VIBEVOICE_VOICE"),
-            cfg_scale=float(os.getenv("VIBEVOICE_CFG_SCALE", "1.5")),
-            ddpm_steps=int(os.getenv("VIBEVOICE_DDPM_STEPS", "5")),
             voices_dir=os.getenv("VIBEVOICE_VOICES_DIR"),
         )
 
@@ -105,16 +96,10 @@ def initialize_tts_engine():
         return ChatterboxTTS(
             device=os.getenv("DEVICE", "cuda").lower(),
             audio_prompt_path=os.getenv("CHATTERBOX_AUDIO_PROMPT"),
-            repetition_penalty=float(os.getenv("CHATTERBOX_REPETITION_PENALTY", "2.0")),
-            min_p=float(os.getenv("CHATTERBOX_MIN_P", "0.05")),
-            top_p=float(os.getenv("CHATTERBOX_TOP_P", "1.0")),
-            temperature=float(os.getenv("CHATTERBOX_TEMPERATURE", "0.8")),
-            exaggeration=float(os.getenv("CHATTERBOX_EXAGGERATION", "0.5")),
-            cfg_weight=float(os.getenv("CHATTERBOX_CFG_WEIGHT", "0.5")),
         )
 
     raise ValueError(
-        f"Unknown TTS_ENGINE='{engine}'. Supported: coqui, vibevoice, chatterbox"
+        f"Unknown TTS_ENGINE='{engine}'. Supported: vibevoice, chatterbox"
     )
 
 

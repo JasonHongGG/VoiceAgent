@@ -24,7 +24,6 @@ from .base import TTSEngine, TTSResult
 from .vibevoice.voice_presets import VoicePresetMapper
 from .vibevoice.imports import get_vibevoice_classes
 
-
 @dataclass(frozen=True)
 class _DeviceConfig:
     device: str
@@ -58,16 +57,15 @@ class VibeVoiceTTS(TTSEngine):
         self,
         model_path: str = "microsoft/VibeVoice-Realtime-0.5B",
         device: str = "cpu",
-        voice: str = None,
-        cfg_scale: float = 1.5,
-        ddpm_steps: int = 5,
-        voices_dir: str = None,
+        voice: Optional[str] = None,
+        voices_dir: Optional[str] = None,
     ):
         # ensure_vibevoice_importable()
 
         self.model_path = model_path
-        self.cfg_scale = float(cfg_scale)
-        self.ddpm_steps = int(ddpm_steps)
+        # Env-driven tuning knobs (keep public API minimal)
+        self.cfg_scale = float(os.getenv("VIBEVOICE_CFG_SCALE", 1.5))
+        self.ddpm_steps = int(os.getenv("VIBEVOICE_DDPM_STEPS", 5))
 
         # Device config
         self.device = device
@@ -75,10 +73,11 @@ class VibeVoiceTTS(TTSEngine):
 
         # Voice preset mapper
         REPO_ROOT = Path(__file__).resolve().parents[2]
+        voices_dir = voices_dir or "resources/voices/streaming_model"
         voices_path = (REPO_ROOT / voices_dir).resolve()
         self._voice_mapper = VoicePresetMapper(voices_path)
 
-        self._current_voice_name = voice.strip().lower() or None
+        self._current_voice_name = (voice or "").strip().lower() or None
         self._cached_voice_preset: Optional[dict] = None
 
         print(
@@ -144,7 +143,6 @@ class VibeVoiceTTS(TTSEngine):
         # Prime cached prompt
         self._load_voice_preset(self._current_voice_name)
 
-        self._languages = ["en", "zh"]
         self._sample_rate = int(getattr(self.processor.audio_processor, "sampling_rate", 24000))
         print(f"[VibeVoiceTTS] Ready. sample_rate={self._sample_rate}, voices={len(self._voice_mapper.list())}")
 
@@ -154,26 +152,9 @@ class VibeVoiceTTS(TTSEngine):
         self._cached_voice_preset = torch.load(str(voice_pt), map_location=self._device_cfg.device, weights_only=False)
         print(f"[VibeVoiceTTS] Using voice preset: {self._current_voice_name} ({voice_pt})")
 
-    def synthesize(
-        self,
-        text: str,
-        language: Optional[str] = None,
-        speaker: Optional[str] = None,
-        **kwargs,
-    ) -> TTSResult:
-        """Synthesize text to speech.
-
-        Extra kwargs (e.g., emotion parameters like temperature/speed/speaker_wav) are accepted for
-        compatibility with the rest of this repo, but are currently ignored by VibeVoice.
-        """
+    def synthesize(self, text: str, language: Optional[str] = None) -> TTSResult:
         if not text:
             return TTSResult(audio=np.zeros((0,), dtype=np.float32), sample_rate=self._sample_rate)
-
-        # Switch voice if caller requested a different speaker
-        if speaker:
-            requested = speaker.strip().lower()
-            if requested and requested != self._current_voice_name:
-                self._load_voice_preset(requested)
 
         if self._cached_voice_preset is None:
             self._load_voice_preset(self._current_voice_name)
@@ -214,9 +195,3 @@ class VibeVoiceTTS(TTSEngine):
         audio_tensor = outputs.speech_outputs[0]
         audio = audio_tensor.detach().cpu().float().numpy().squeeze().astype(np.float32)
         return TTSResult(audio=audio, sample_rate=self._sample_rate)
-
-    def get_supported_languages(self) -> list[str]:
-        return self._languages.copy()
-
-    def get_supported_speakers(self) -> list[str]:
-        return self._voice_mapper.list()

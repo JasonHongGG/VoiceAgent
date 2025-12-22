@@ -17,7 +17,8 @@ modules/
 │   └── whisper_stt.py
 ├── tts/                       # 文字轉語音
 │   ├── base.py
-│   └── coqui_tts.py
+│   ├── chatterbox_tts.py
+│   └── vibevoice_tts.py
 ├── tools/                     # Agent 工具
 │   ├── base.py
 │   ├── manager.py
