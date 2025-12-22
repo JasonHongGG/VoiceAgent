@@ -217,6 +217,30 @@ tts = CoquiTTS(
     reference_speaker="path/to/speaker.wav",  # 可選
 )
 
+#### 使用 Chatterbox（支援中文/日文等 23+ 語言）
+
+安裝：
+
+```bash
+pip install chatterbox-tts
+```
+
+使用環境變數切換：
+
+```bash
+export TTS_ENGINE=chatterbox
+
+# （可選）提供 5-10 秒左右的參考音檔做 zero-shot voice cloning
+export CHATTERBOX_AUDIO_PROMPT=/path/to/ref.wav
+
+# （可選）控制風格
+export CHATTERBOX_EXAGGERATION=0.5
+export CHATTERBOX_CFG_WEIGHT=0.5
+export CHATTERBOX_TEMPERATURE=0.8
+```
+
+在程式呼叫時，`VoiceAgent` 會根據文字自動偵測語言並傳入 `language`（例如 `zh` / `ja`）。
+
 #### 使用 VibeVoice（額外選項）
 
 VibeVoice 需要額外依賴與模型權重（預設從 Hugging Face 下載 `microsoft/VibeVoice-Realtime-0.5B`）。

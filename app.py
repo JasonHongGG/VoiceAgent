@@ -20,15 +20,11 @@ voice_agent = setup_voice_agent()
 PROMPT_CONFIG = load_prompt_config()
 
 # 預先合成歡迎語音，避免連線後再等待 TTS 啟動
-GREETING_TEXT = PROMPT_CONFIG.get(
-    "greeting_message",
-    "你好！我是你的語音助理，有什麼可以幫助你的嗎？",
-)
 PRECOMPUTED_GREETING = None
 try:
     PRECOMPUTED_GREETING = voice_agent.synthesize_speech(
-        text=GREETING_TEXT,
-        language="zh",
+        text=PROMPT_CONFIG.get("greeting_message"),
+        language=PROMPT_CONFIG.get("language"),
     )
     print(f"[Greeting] Warmed up greeting audio: {len(PRECOMPUTED_GREETING.audio)} samples")
 except Exception as exc:
@@ -41,7 +37,7 @@ def greet_user():
     啟動時的歡迎函數，會在 WebRTC 連接建立時自動執行。
     直接使用 TTS，不經過 LLM，避免無限循環。
     """
-    greeting_text = GREETING_TEXT
+    greeting_text = PROMPT_CONFIG.get("greeting_message")
     print(f"[Greeting] Sending welcome message: '{greeting_text}'")
 
     try:
@@ -107,7 +103,7 @@ if __name__ == "__main__":
     
     # 可用環境變數指定 HOST/PORT 與 SSL 憑證；行動裝置音訊裝置切換在 HTTPS 下更穩定
     server_name = os.getenv("HOST", "0.0.0.0")
-    server_port = int(os.getenv("PORT", "5000"))
+    server_port = int(os.getenv("PORT", "3000"))
     ssl_certfile = os.getenv("SSL_CERTFILE")
     ssl_keyfile = os.getenv("SSL_KEYFILE")
 

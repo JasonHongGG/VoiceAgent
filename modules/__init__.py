@@ -8,7 +8,13 @@ from .llm.base import LLMEngine, LLMResponse
 # Implementations
 from .stt.whisper_stt import WhisperSTT
 from .tts.coqui_tts import CoquiTTS
-from .tts.vibevoice_tts import VibeVoiceTTS
+from .tts.chatterbox_tts import ChatterboxTTS
+
+# Optional: VibeVoice has extra pinned deps. Keep import lazy/optional.
+try:
+    from .tts.vibevoice_tts import VibeVoiceTTS  # type: ignore
+except Exception:  # pragma: no cover
+    VibeVoiceTTS = None  # type: ignore
 from .llm.ollama_llm import OllamaLLM
 
 # High-level agent
@@ -33,6 +39,7 @@ __all__ = [
     # Implementations
     "WhisperSTT",
     "CoquiTTS",
+    "ChatterboxTTS",
     "VibeVoiceTTS",
     "OllamaLLM",
     # Agent

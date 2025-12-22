@@ -22,8 +22,7 @@ import torch
 
 from .base import TTSEngine, TTSResult
 from .vibevoice.voice_presets import VoicePresetMapper
-from .vibevoice.modular.modeling_vibevoice_streaming_inference import VibeVoiceStreamingForConditionalGenerationInference
-from .vibevoice.processor.vibevoice_streaming_processor import VibeVoiceStreamingProcessor
+from .vibevoice.imports import get_vibevoice_classes
 
 
 @dataclass(frozen=True)
@@ -93,14 +92,16 @@ class VibeVoiceTTS(TTSEngine):
             )
         )
 
+        model_cls, processor_cls = get_vibevoice_classes()
+
         # Load processor
-        self.processor = VibeVoiceStreamingProcessor.from_pretrained(self.model_path)
+        self.processor = processor_cls.from_pretrained(self.model_path)
 
         # Load model with conservative fallbacks (mirrors demo logic)
         attn_impl = self._device_cfg.attn_implementation
         try:
             if self._device_cfg.device == "mps":
-                self.model = VibeVoiceStreamingForConditionalGenerationInference.from_pretrained(
+                self.model = model_cls.from_pretrained(
                     self.model_path,
                     torch_dtype=self._device_cfg.torch_dtype,
                     attn_implementation=attn_impl,
@@ -108,7 +109,7 @@ class VibeVoiceTTS(TTSEngine):
                 )
                 self.model.to("mps")
             else:
-                self.model = VibeVoiceStreamingForConditionalGenerationInference.from_pretrained(
+                self.model = model_cls.from_pretrained(
                     self.model_path,
                     torch_dtype=self._device_cfg.torch_dtype,
                     attn_implementation=attn_impl,
@@ -120,7 +121,7 @@ class VibeVoiceTTS(TTSEngine):
                     f"[VibeVoiceTTS] Model load failed with flash_attention_2 ({type(exc).__name__}: {exc}). Falling back to SDPA."
                 )
                 if self._device_cfg.device == "mps":
-                    self.model = VibeVoiceStreamingForConditionalGenerationInference.from_pretrained(
+                    self.model = model_cls.from_pretrained(
                         self.model_path,
                         torch_dtype=self._device_cfg.torch_dtype,
                         attn_implementation="sdpa",
@@ -128,7 +129,7 @@ class VibeVoiceTTS(TTSEngine):
                     )
                     self.model.to("mps")
                 else:
-                    self.model = VibeVoiceStreamingForConditionalGenerationInference.from_pretrained(
+                    self.model = model_cls.from_pretrained(
                         self.model_path,
                         torch_dtype=self._device_cfg.torch_dtype,
                         attn_implementation="sdpa",

@@ -98,8 +98,23 @@ def initialize_tts_engine():
             voices_dir=os.getenv("VIBEVOICE_VOICES_DIR"),
         )
 
+    if engine in {"chatterbox", "chatterbox-tts", "chatterbox_multilingual", "chatterbox-multilingual"}:
+        # Lazy import (downloads weights from HF on first init)
+        from modules.tts import ChatterboxTTS
+
+        return ChatterboxTTS(
+            device=os.getenv("DEVICE", "cuda").lower(),
+            audio_prompt_path=os.getenv("CHATTERBOX_AUDIO_PROMPT"),
+            repetition_penalty=float(os.getenv("CHATTERBOX_REPETITION_PENALTY", "2.0")),
+            min_p=float(os.getenv("CHATTERBOX_MIN_P", "0.05")),
+            top_p=float(os.getenv("CHATTERBOX_TOP_P", "1.0")),
+            temperature=float(os.getenv("CHATTERBOX_TEMPERATURE", "0.8")),
+            exaggeration=float(os.getenv("CHATTERBOX_EXAGGERATION", "0.5")),
+            cfg_weight=float(os.getenv("CHATTERBOX_CFG_WEIGHT", "0.5")),
+        )
+
     raise ValueError(
-        f"Unknown TTS_ENGINE='{engine}'. Supported: coqui, vibevoice"
+        f"Unknown TTS_ENGINE='{engine}'. Supported: coqui, vibevoice, chatterbox"
     )
 
 
