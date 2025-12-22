@@ -3,22 +3,15 @@
 This wraps the `chatterbox-tts` python package (https://github.com/resemble-ai/chatterbox)
 into the repo's `TTSEngine` interface.
 
-Notes:
-- The upstream model uses a built-in voice conditioning file (`conds.pt`) by default.
-- You can optionally provide an audio prompt (voice reference) via:
-  - `speaker` argument (if it is a valid file path), or
-  - `speaker_wav` kwarg, or
-  - env var `CHATTERBOX_AUDIO_PROMPT`, or
-  - env var `TTS_SPEAKER_WAV` (shared with Coqui settings).
-
-Language support:
-- This engine uses the multilingual model, which supports Chinese (`zh`) and Japanese (`ja`).
+Design goals:
+- Keep behavior close to upstream examples (a single `generate()` per request).
+- Only add minimal glue: device selection, language normalization, optional audio prompt,
+    and converting output into `TTSResult`.
 """
 
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -70,122 +63,6 @@ def _normalize_language_id(language: Optional[str]) -> str:
         lang = lang.split("-", 1)[0]
 
     return lang
-
-
-def _split_text_into_chunks(text: str, max_chunk_chars: int = 180) -> list[str]:
-    """Split long text into smaller chunks to reduce TTS truncation.
-
-    Chatterbox multilingual sets a fixed `max_new_tokens` internally; long or complex
-    inputs can still end up truncated. Chunking by sentence boundaries is a simple
-    mitigation.
-    """
-    if not text:
-        return []
-
-    cleaned = text.strip()
-    if len(cleaned) <= max_chunk_chars:
-        return [cleaned]
-
-    # Keep delimiters.
-    parts = re.split(r"([。！？.!?;；\n]+)", cleaned)
-
-    sentences: list[str] = []
-    buf = ""
-    for part in parts:
-        if not part:
-            continue
-        if re.fullmatch(r"[。！？.!?;；\n]+", part):
-            buf += part
-            if buf.strip():
-                sentences.append(buf.strip())
-            buf = ""
-        else:
-            # plain text
-            buf += part
-
-    if buf.strip():
-        sentences.append(buf.strip())
-
-    # Merge into chunks up to max_chunk_chars
-    chunks: list[str] = []
-    cur = ""
-    for sentence in sentences:
-        if not cur:
-            cur = sentence
-            continue
-        if len(cur) + 1 + len(sentence) <= max_chunk_chars:
-            cur = f"{cur} {sentence}".strip()
-        else:
-            chunks.append(cur)
-            cur = sentence
-    if cur:
-        chunks.append(cur)
-
-    # As a last resort, hard-split any very long chunk.
-    final: list[str] = []
-    for chunk in chunks:
-        if len(chunk) <= max_chunk_chars:
-            final.append(chunk)
-            continue
-        for i in range(0, len(chunk), max_chunk_chars):
-            final.append(chunk[i : i + max_chunk_chars].strip())
-
-    return [c for c in final if c]
-
-
-def _env_int(name: str) -> Optional[int]:
-    raw = os.getenv(name)
-    if raw is None:
-        return None
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        return None
-
-
-def _get_max_chunk_chars(language_id: str) -> int:
-    # Allow overriding chunk size without code changes.
-    # This is the single most effective mitigation for early-EOS truncation.
-    v = _env_int("CHATTERBOX_MAX_CHUNK_CHARS")
-    if v is not None and v > 0:
-        return v
-
-    # Default: keep behavior close to upstream (single-shot generation).
-    # Chunking is only applied for very long texts, and we still have a
-    # fallback re-chunking path if output is suspiciously short.
-    return 180
-
-
-def _audio_is_suspiciously_short(audio_samples: int, sample_rate: int, text: str) -> bool:
-    """Heuristic: detect when the model likely forced EOS too early.
-
-    Chatterbox multilingual can force EOS on token repetition; when that happens,
-    we often see very short audio relative to text length (e.g. only saying the
-    first 1-2 words).
-    """
-    if sample_rate <= 0:
-        return False
-
-    t = (text or "").strip()
-    if len(t) < 8:
-        return False
-
-    secs = audio_samples / float(sample_rate)
-    # Very conservative expectation: roughly >= 40ms per char for longer utterances.
-    expected_min = min(10.0, max(0.8, 0.04 * len(t)))
-    return secs < expected_min
-
-
-def _hard_split(text: str, max_chars: int) -> list[str]:
-    cleaned = (text or "").strip()
-    if not cleaned:
-        return []
-    if max_chars <= 0:
-        return [cleaned]
-    return [cleaned[i : i + max_chars].strip() for i in range(0, len(cleaned), max_chars) if cleaned[i : i + max_chars].strip()]
 
 
 class ChatterboxTTS(TTSEngine):
@@ -285,71 +162,29 @@ class ChatterboxTTS(TTSEngine):
         exaggeration = float(kwargs.get("exaggeration", self.exaggeration))
         cfg_weight = float(kwargs.get("cfg_weight", self.cfg_weight))
 
-        max_chunk_chars = _get_max_chunk_chars(language_id)
-        chunks = _split_text_into_chunks(text, max_chunk_chars=max_chunk_chars)
-        if not chunks:
-            return TTSResult(audio=np.zeros((0,), dtype=np.float32), sample_rate=self._sample_rate)
+        with torch.inference_mode():
+            wav = self._tts.generate(
+                text=text,
+                language_id=language_id,
+                audio_prompt_path=audio_prompt_path,
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+                temperature=temperature,
+                repetition_penalty=repetition_penalty,
+                min_p=min_p,
+                top_p=top_p,
+            )
 
-        audios: list[np.ndarray] = []
-        silence = np.zeros((int(self._sample_rate * 0.12),), dtype=np.float32)
+        # Upstream returns torch.Tensor shaped (1, n). Convert to 1D float32.
+        if torch.is_tensor(wav):
+            audio = wav.detach().cpu().numpy().squeeze().astype(np.float32)
+        else:
+            audio = np.asarray(wav).squeeze().astype(np.float32)
 
-        def _generate_once(gen_text: str, *, t: float, rp: float, tp: float, mp: float) -> np.ndarray:
-            with torch.inference_mode():
-                wav = self._tts.generate(
-                    text=gen_text,
-                    language_id=language_id,
-                    repetition_penalty=rp,
-                    min_p=mp,
-                    top_p=tp,
-                    audio_prompt_path=audio_prompt_path,
-                    exaggeration=exaggeration,
-                    cfg_weight=cfg_weight,
-                    temperature=t,
-                )
+        if audio.ndim != 1:
+            audio = np.asarray(audio).reshape(-1).astype(np.float32)
 
-            # Upstream returns torch.Tensor shaped (1, n). Convert to 1D float32.
-            if torch.is_tensor(wav):
-                return wav.detach().cpu().numpy().squeeze().astype(np.float32)
-            return np.asarray(wav).squeeze().astype(np.float32)
-
-        for idx, chunk in enumerate(chunks):
-            audio = _generate_once(chunk, t=temperature, rp=repetition_penalty, tp=top_p, mp=min_p)
-
-            # If the model likely forced EOS early, retry with smaller chunks.
-            if _audio_is_suspiciously_short(audio.size, self._sample_rate, chunk):
-                # First fallback: split the chunk much more aggressively.
-                sub_max = max(12, min(24, max_chunk_chars // 2))
-                sub_chunks = _split_text_into_chunks(chunk, max_chunk_chars=sub_max)
-                if len(sub_chunks) <= 1:
-                    sub_chunks = _hard_split(chunk, max_chars=sub_max)
-
-                sub_audios: list[np.ndarray] = []
-                sub_silence = np.zeros((int(self._sample_rate * 0.08),), dtype=np.float32)
-                for j, sub in enumerate(sub_chunks):
-                    sub_audio = _generate_once(sub, t=temperature, rp=repetition_penalty, tp=top_p, mp=min_p)
-                    # Second fallback: one cheap retry with slightly higher entropy.
-                    if _audio_is_suspiciously_short(sub_audio.size, self._sample_rate, sub):
-                        sub_audio = _generate_once(
-                            sub,
-                            t=max(0.95, temperature),
-                            rp=max(1.05, min(repetition_penalty, 1.2)),
-                            tp=min(0.98, top_p),
-                            mp=min_p,
-                        )
-                    if sub_audio.size:
-                        sub_audios.append(sub_audio)
-                        if j != len(sub_chunks) - 1:
-                            sub_audios.append(sub_silence)
-
-                audio = np.concatenate(sub_audios, axis=0) if sub_audios else audio
-
-            if audio.size:
-                audios.append(audio)
-                if idx != len(chunks) - 1:
-                    audios.append(silence)
-
-        merged = np.concatenate(audios, axis=0) if audios else np.zeros((0,), dtype=np.float32)
-        return TTSResult(audio=merged, sample_rate=self._sample_rate)
+        return TTSResult(audio=audio, sample_rate=self._sample_rate)
 
     def get_supported_languages(self) -> list[str]:
         return self._languages.copy()
