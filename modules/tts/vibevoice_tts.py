@@ -22,7 +22,26 @@ import torch
 
 from .base import TTSEngine, TTSResult
 from .vibevoice.voice_presets import VoicePresetMapper
-from .vibevoice.imports import get_vibevoice_classes
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return float(default)
+    try:
+        return float(raw)
+    except ValueError:
+        return float(default)
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return int(default)
+    try:
+        return int(raw)
+    except ValueError:
+        return int(default)
 
 @dataclass(frozen=True)
 class _DeviceConfig:
@@ -64,8 +83,8 @@ class VibeVoiceTTS(TTSEngine):
 
         self.model_path = model_path
         # Env-driven tuning knobs (keep public API minimal)
-        self.cfg_scale = float(os.getenv("VIBEVOICE_CFG_SCALE", 1.5))
-        self.ddpm_steps = int(os.getenv("VIBEVOICE_DDPM_STEPS", 5))
+        self.cfg_scale = _env_float("VIBEVOICE_CFG_SCALE", 1.5)
+        self.ddpm_steps = _env_int("VIBEVOICE_DDPM_STEPS", 5)
 
         # Device config
         self.device = device
@@ -91,7 +110,12 @@ class VibeVoiceTTS(TTSEngine):
             )
         )
 
-        model_cls, processor_cls = get_vibevoice_classes()
+        from vibevoice.modular.modeling_vibevoice_streaming_inference import (
+            VibeVoiceStreamingForConditionalGenerationInference as model_cls,
+        )
+        from vibevoice.processor.vibevoice_streaming_processor import (
+            VibeVoiceStreamingProcessor as processor_cls,
+        )
 
         # Load processor
         self.processor = processor_cls.from_pretrained(self.model_path)

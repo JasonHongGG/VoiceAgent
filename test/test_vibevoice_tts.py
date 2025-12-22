@@ -21,19 +21,25 @@ class TestVibeVoiceIntegration(unittest.TestCase):
             resolved = mapper.resolve("en-emma_woman")
             self.assertTrue(resolved.is_file())
 
-    def test_lazy_imports_are_actionable(self):
-        """VibeVoice imports should either work or fail with a helpful ImportError."""
-        from modules.tts.vibevoice.imports import get_vibevoice_classes
+    def test_vibevoice_vendored_imports(self):
+        """Direct vendored imports should either work or raise ImportError.
+
+        VibeVoice is optional and may require pinned deps in requirements-vibevoice.txt.
+        """
 
         try:
-            model_cls, processor_cls = get_vibevoice_classes()
-        except ImportError as exc:
-            # If deps are missing, error should guide user to the optional requirements.
-            self.assertIn("requirements-vibevoice.txt", str(exc))
+            from vibevoice.modular.modeling_vibevoice_streaming_inference import (
+                VibeVoiceStreamingForConditionalGenerationInference,
+            )
+            from vibevoice.processor.vibevoice_streaming_processor import (
+                VibeVoiceStreamingProcessor,
+            )
+        except ImportError:
             return
 
-        self.assertTrue(callable(model_cls))
-        self.assertTrue(callable(processor_cls))
+        self.assertTrue(callable(VibeVoiceStreamingForConditionalGenerationInference))
+        self.assertTrue(callable(VibeVoiceStreamingProcessor))
+
 
 
 if __name__ == "__main__":
