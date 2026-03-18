@@ -1,4 +1,16 @@
 .env
 /.venv/*
 /.gradio/*
-/__pycache__/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
